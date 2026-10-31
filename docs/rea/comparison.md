@@ -123,7 +123,7 @@ open build/Jfred.app
 | 偏好设置 10 个 section | 已完成：General / Features / Workflows / Appearance / Remote / Advanced / Powerpack / Usage / Help / Update |
 | Features 16 页 | 已完成：Default Results、File Search、Universal Actions、Web Search、Web Bookmarks、Clipboard、Snippets、Calculator、Dictionary、Contacts、Music、1Password、System、Terminal、Large Type、Previews |
 | 启动器 | 已完成：Alfred 主题指标、10 套主题、Action Panel、Universal Actions、Alfred 结果行/搜索框尺寸 |
-| Workflows | 已完成：深色空态、内嵌画布、Objects 调色板、拖拽重排、Inspector、Add/Duplicate/Remove、Hotkey、Run/Step/Debugger、断点 |
+| Workflows | 已完成：Alfred 对象图导入、Script Filter/List Filter、条件分支、运行脚本、画布节点、连接编辑、Inspector、Run/Step/Debugger、断点 |
 | Clipboard / Snippets | 已完成：三类独立保留、Ignore Apps、Clear Keyword、Snippets 整合、Auto Expansion |
 | Contacts / Music | 已完成：搜索、Open/Email/Call/Maps、显示选项、Mini Player、播放列表、封面 |
 | Themes | 已完成：导入/导出 `.alfredappearance`、自定义主题编辑、删除、实时预览 |
@@ -133,7 +133,24 @@ open build/Jfred.app
 
 ### 已知限制
 
-- Workflows 尚不支持节点自由连线/分支合并（当前为线性 action 链 + 断点/单步）。
+- Workflows 已支持对象图和条件分支；仍不支持 Alfred 的端口拖拽画线和私有 Automation Task。
 - 少量高级选项仍只有 UI/偏好字段，未逐一接行为（Clipboard Fast Append、Music random larger albums、File Search arrow navigation）。
 - Alfred 的手绘图标、壁纸、nib/字符串表未复制；Jfred 使用 SF Symbols 与独立生成资源。
 - 像素级仍有少量 1–3pt 差异。
+
+
+## Workflows 第二轮（对象图）
+
+本轮把 Workflows 从“线性 action 链”推进到 Alfred 兼容的对象图：
+
+- 直接读取 `.alfredworkflow` 的 `info.plist`，保留 `objects`、`connections`、`uidata`、`variables`；导入 uicli workflow 得到 12 objects / 10 connections。
+- 画布按 `xpos/ypos` 显示节点，按真实连接画曲线；节点可拖动，`sourceoutputuid` 条件分支与 `modifiers` 连线可分别编辑。
+- 启动器命中 keyword 后执行 Script Filter/List Filter，支持 JSON `items`、旧 XML、`variables`、`mods`、`arg` 数组、`alfredfiltersresults`。
+- 执行器覆盖 Script Filter → Run Script → Arg and Vars → Conditional → 输出动作；Run Script 的 stdout 继续向下传递，注入 `alfred_workflow_*` 环境变量。
+- 旧版 state 中的 `keyword + actions` 会自动迁移成对象图；`definitionVersion` 区分旧格式、Alfred 导入图和本地图，避免启动时覆盖本地编辑。
+- Workflows 调色板、Inspector、连接 Picker、Run/Step 调试器和断点已接到新模型。
+- Powerpack 启用后按 5.8.1 实机窗口重新取样：右侧 243pt 紧凑对象库、90pt 标题栏、132×94pt 对象卡、`#4B809C` 选中行、27pt 对象库行；禁用行 55% 淡色 + 去饱和，标题带 ` - disabled`。
+- `Configure Workflow...` 改为 Alfred 的 User Configuration 入口；无配置时显示 “No Workflow Configuration” 对话框，元数据编辑移到 `...` → `Workflow Details...`。
+- 仍不执行 Alfred 私有 Automation Task；节点连线通过 Inspector 的目标 Picker 编辑，不做端口拖拽。
+
+证据与执行边界见 [workflows.md](workflows.md)。

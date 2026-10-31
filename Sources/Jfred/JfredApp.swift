@@ -11,9 +11,9 @@ struct JfredApp: App {
         let _ = registerPreferencesOpener()
         Window("Jfred Preferences", id: "preferences") {
             PreferencesShell(model: delegate.model)
-                .frame(minWidth: 980, minHeight: 640)
+                .frame(minWidth: 1180, minHeight: 700)
         }
-        .defaultSize(width: 1120, height: 740)
+        .defaultSize(width: 1422, height: 860)
         .windowToolbarStyle(.unifiedCompact)
         .commands {
             CommandGroup(replacing: .newItem) {}
@@ -106,6 +106,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else if url.host == "run", let keyword = items.first(where: { $0.name == "keyword" })?.value {
                 model.query = keyword + " "
                 model.showLauncher()
+            } else if url.host == "workflows" {
+                model.section = .workflows
+                model.showPreferences()
+                if let configure = items.first(where: { $0.name == "configure" })?.value {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                        self.model.openWorkflowConfig(showsWorkflow: configure == "workflow")
+                    }
+                }
             }
         }
     }

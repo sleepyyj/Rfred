@@ -6,17 +6,28 @@
 
 | 项目 | 值 |
 | --- | --- |
-| Alfred | 5.7 (build 2302) |
-| 主程序 | `/Applications/Alfred 5.app/Contents/MacOS/Alfred`，SHA-256 `e84762abac9f9a83ff5a87891c1bd03108b138a2b84d6d0434db7cfd9582ba68` |
-| Framework | `.../Frameworks/Alfred Framework.framework/Versions/A/Alfred Framework`，SHA-256 `1b21c6f45b1f8373bd700bd1ed1e0c601785176b0593511492a4a225fa2927f5` |
-| Preferences | `.../Preferences/Alfred Preferences.app/Contents/MacOS/Alfred Preferences`，SHA-256 `4f2ff8212aae77e129abc4cfa98d608af024aa1357e4a1faf1c251413b82c4b8` |
+| Alfred | 5.8.1 (build 2349)（本机当前版本；早期 5.7 证据仍保留在下方历史表中） |
+| 主程序 | `/Applications/Alfred 5.app/Contents/MacOS/Alfred`，SHA-256 `f4a6c0ef4ea4eb054c786f7db36a9ea4859a4de550838002f6d873132bc99e15` |
+| Framework | `.../Frameworks/Alfred Framework.framework/Versions/A/Alfred Framework`，SHA-256 `26f09f4435f52d15bb07a35c3356d0f898b563699a2313ebd51b702b20f50b2d` |
+| Preferences | `.../Preferences/Alfred Preferences.app/Contents/MacOS/Alfred Preferences`，SHA-256 `68275bfafa5fe9377305f67f1134fea259ca29a03e9d97475182acce90e11689` |
 | REA | `rea-agents` 6.7.0（CLI/MCP 同一套工具） |
-| 反汇编器 | Hopper Disassembler 6.6.0-demo |
+| 反汇编器 | Hopper Disassembler 6.6.0-demo（Mach-O / IB 检查本轮不需要启动 Hopper） |
 | 主机 | macOS 27.0.1，arm64 |
+
+
+## Workflows 模块专项证据（5.8.1 本轮）
+
+Workflows 的完整对象图、脚本执行和画布布局见 [workflows.md](workflows.md)。本轮新增的可复核证据：
+
+| 操作 | 证据 ID | 结果 |
+| --- | --- | --- |
+| `inspect-macho` Alfred Framework | `ev_cc8f3498ab6677c79774b2144b1a733d7375ca63ab3d236d42fafc1cba89d51d` | fat Mach-O，arm64 slice 5,522,960 bytes，29,708 symbols |
+| `decode-interface-builder` Preferences | `ev_6e2bcbeb753d052bab72f7f29fccf621b102037d9a545832a5dcbc6169eebdf3` | 18 documents / 2,649 nodes；Workflows nib 241 objects / 86 connections |
+| `inspect-plist` uicli workflow | `ev_b0d507c8b7da226438e69b771830c923eb59c471a3ba01753f27fbde7a48655c` | 12 objects / 10 connections；确认 `sourceoutputuid`、`scriptfile`、嵌套 `conditions` |
 
 ## 方法与证据
 
-`rea` CLI 在 DSH 的 workspace-write 沙箱里无法启动并控制 Hopper（`spawn EPERM` / AppleEvents 被 TCC 拒绝）。把同一条命令放进 Terminal.app 执行后，TCC 责任进程变为 Terminal，Hopper 才能正常打开与反编译。因此本目录的所有 REA 命令都是通过一个临时 Terminal runner 执行的，目标、参数和输出没有变化。
+早期轮次中，`rea` CLI 在 DSH 的 workspace-write 沙箱里无法启动并控制 Hopper（`spawn EPERM` / AppleEvents 被 TCC 拒绝）。把同一条命令放进 Terminal.app 执行后，TCC 责任进程变为 Terminal，Hopper 才能正常打开与反编译。因此早期反编译命令通过临时 Terminal runner 执行；本轮只使用 `inspect-macho` / `decode-interface-builder` / `inspect-plist`，不需要启动 Hopper，直接在 DSH 中可复核。
 
 | 操作 | 证据 ID | 结果 |
 | --- | --- | --- |

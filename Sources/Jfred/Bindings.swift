@@ -94,6 +94,8 @@ extension AppModel {
                 MainActor.assumeIsolated {
                     guard let index = self.workflows.firstIndex(where: { $0.id == id }) else { return }
                     self.workflows[index][keyPath: keyPath] = newValue
+                    self.workflowEdited()
+                    self.applyHotkeys()
                 }
             }
         )
@@ -130,12 +132,20 @@ extension AppModel {
         editingWorkflowID = workflow.id
         selectedWorkflow = workflow.id
         workflowSelection = nil
+        selectedWorkflowObject = workflow.searchInputs.first?.id
         debuggerVisible = false
         debugLines = []
         debugCursor = 0
         debugWorkflowID = nil
         debugBreakpoints = []
         debugPaused = false
+        workflowDebugState = nil
+        debugLoggedCount = 0
+        debugAppliedEffects = 0
+        workflowConfigPresented = false
+        workflowConfigShowsWorkflow = false
+        workflowConfigEditsMetadata = false
+        workflowConfigSnapshot = nil
     }
 
     func cancelWorkflowEdit() {
@@ -150,6 +160,10 @@ extension AppModel {
         workflowSnapshot = nil
         workflowIsNew = false
         workflowSelection = nil
+        selectedWorkflowObject = nil
+        workflowDebugState = nil
+        debugLoggedCount = 0
+        debugAppliedEffects = 0
     }
 
     func saveWorkflowEdit() {
@@ -158,5 +172,162 @@ extension AppModel {
         workflowIsNew = false
         workflowSelection = nil
         workflowsChanged()
+    }
+}
+
+extension AppModel {
+    func bindWorkflowObject<T: Sendable>(_ workflowID: UUID, _ objectID: UUID, _ keyPath: WritableKeyPath<WorkflowObject, T>, default defaultValue: T) -> Binding<T> {
+        Binding(
+            get: {
+                MainActor.assumeIsolated {
+                    guard let workflow = self.workflows.first(where: { $0.id == workflowID }),
+                          let object = workflow.object(id: objectID) else { return defaultValue }
+                    return object[keyPath: keyPath]
+                }
+            },
+            set: { newValue in
+                MainActor.assumeIsolated {
+                    guard let workflowIndex = self.workflows.firstIndex(where: { $0.id == workflowID }),
+                          let objectIndex = self.workflows[workflowIndex].objects.firstIndex(where: { $0.id == objectID }) else { return }
+                    self.workflows[workflowIndex].objects[objectIndex][keyPath: keyPath] = newValue
+                    self.workflowEdited()
+                }
+            }
+        )
+    }
+
+    func bindWorkflowString(_ workflowID: UUID, _ objectID: UUID, _ key: String, default defaultValue: String = "") -> Binding<String> {
+        Binding(
+            get: {
+                MainActor.assumeIsolated {
+                    self.workflows.first { $0.id == workflowID }?.object(id: objectID)?.config[string: key] ?? defaultValue
+                }
+            },
+            set: { newValue in
+                MainActor.assumeIsolated {
+                    guard let workflowIndex = self.workflows.firstIndex(where: { $0.id == workflowID }),
+                          let objectIndex = self.workflows[workflowIndex].objects.firstIndex(where: { $0.id == objectID }) else { return }
+                    self.workflows[workflowIndex].objects[objectIndex].config[key] = .string(newValue)
+                    self.workflowEdited()
+                }
+            }
+        )
+    }
+
+    func bindWorkflowInt(_ workflowID: UUID, _ objectID: UUID, _ key: String, default defaultValue: Int = 0) -> Binding<Int> {
+        Binding(
+            get: {
+                MainActor.assumeIsolated {
+                    self.workflows.first { $0.id == workflowID }?.object(id: objectID)?.config[key]?.intValue ?? defaultValue
+                }
+            },
+            set: { newValue in
+                MainActor.assumeIsolated {
+                    guard let workflowIndex = self.workflows.firstIndex(where: { $0.id == workflowID }),
+                          let objectIndex = self.workflows[workflowIndex].objects.firstIndex(where: { $0.id == objectID }) else { return }
+                    self.workflows[workflowIndex].objects[objectIndex].config[key] = .integer(newValue)
+                    self.workflowEdited()
+                }
+            }
+        )
+    }
+
+    func bindWorkflowBool(_ workflowID: UUID, _ objectID: UUID, _ key: String, default defaultValue: Bool = false) -> Binding<Bool> {
+        Binding(
+            get: {
+                MainActor.assumeIsolated {
+                    self.workflows.first { $0.id == workflowID }?.object(id: objectID)?.config[key]?.boolValue ?? defaultValue
+                }
+            },
+            set: { newValue in
+                MainActor.assumeIsolated {
+                    guard let workflowIndex = self.workflows.firstIndex(where: { $0.id == workflowID }),
+                          let objectIndex = self.workflows[workflowIndex].objects.firstIndex(where: { $0.id == objectID }) else { return }
+                    self.workflows[workflowIndex].objects[objectIndex].config[key] = .boolean(newValue)
+                    self.workflowEdited()
+                }
+            }
+        )
+    }
+
+    func bindWorkflowVariables(_ workflowID: UUID, _ objectID: UUID) -> Binding<String> {
+        Binding(
+            get: {
+                MainActor.assumeIsolated {
+                    guard let object = self.workflows.first(where: { $0.id == workflowID })?.object(id: objectID) else { return "" }
+                    return object.config.strings("variables").sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "\n")
+                }
+            },
+            set: { text in
+                MainActor.assumeIsolated {
+                    guard let workflowIndex = self.workflows.firstIndex(where: { $0.id == workflowID }),
+                          let objectIndex = self.workflows[workflowIndex].objects.firstIndex(where: { $0.id == objectID }) else { return }
+                    var variables: [String: WorkflowValue] = [:]
+                    for line in text.split(separator: "\n") {
+                        guard let equals = line.firstIndex(of: "=") else { continue }
+                        let key = line[..<equals].trimmingCharacters(in: .whitespaces)
+                        guard !key.isEmpty else { continue }
+                        let value = line[line.index(after: equals)...].trimmingCharacters(in: .whitespaces)
+                        variables[key] = .string(value)
+                    }
+                    self.workflows[workflowIndex].objects[objectIndex].config["variables"] = .object(variables)
+                    self.workflowEdited()
+                }
+            }
+        )
+    }
+
+    func bindWorkflowConditionString(_ workflowID: UUID, _ objectID: UUID, _ index: Int, _ key: String) -> Binding<String> {
+        Binding(
+            get: {
+                MainActor.assumeIsolated {
+                    guard let object = self.workflows.first(where: { $0.id == workflowID })?.object(id: objectID),
+                          let conditions = object.config["conditions"]?.arrayValue,
+                          conditions.indices.contains(index),
+                          let bits = conditions[index].objectValue else { return "" }
+                    return bits[string: key]
+                }
+            },
+            set: { newValue in
+                MainActor.assumeIsolated {
+                    guard let workflowIndex = self.workflows.firstIndex(where: { $0.id == workflowID }),
+                          let objectIndex = self.workflows[workflowIndex].objects.firstIndex(where: { $0.id == objectID }),
+                          var conditions = self.workflows[workflowIndex].objects[objectIndex].config["conditions"]?.arrayValue,
+                          conditions.indices.contains(index),
+                          var bits = conditions[index].objectValue else { return }
+                    bits[key] = .string(newValue)
+                    conditions[index] = .object(bits)
+                    self.workflows[workflowIndex].objects[objectIndex].config["conditions"] = .array(conditions)
+                    self.workflowEdited()
+                }
+            }
+        )
+    }
+}
+
+extension AppModel {
+    func bindWorkflowVariables(_ workflowID: UUID) -> Binding<String> {
+        Binding(
+            get: {
+                MainActor.assumeIsolated {
+                    guard let workflow = self.workflows.first(where: { $0.id == workflowID }) else { return "" }
+                    return workflow.variables.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "\n")
+                }
+            },
+            set: { text in
+                MainActor.assumeIsolated {
+                    guard let index = self.workflows.firstIndex(where: { $0.id == workflowID }) else { return }
+                    var variables: [String: String] = [:]
+                    for line in text.split(separator: "\n") {
+                        guard let equals = line.firstIndex(of: "=") else { continue }
+                        let key = line[..<equals].trimmingCharacters(in: .whitespaces)
+                        guard !key.isEmpty else { continue }
+                        variables[key] = line[line.index(after: equals)...].trimmingCharacters(in: .whitespaces)
+                    }
+                    self.workflows[index].variables = variables
+                    self.workflowEdited()
+                }
+            }
+        )
     }
 }

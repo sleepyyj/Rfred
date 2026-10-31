@@ -99,7 +99,7 @@ Jfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern�
 - **1Password**：绿色 “1Password 8 Integration” 卡片 + 获取工作流按钮、集成开关、加载状态。
 - **Clipboard Advanced**：Ignore Apps 可编辑列表；File Buffer 支持超时/动作后清空；Clear Keyword 支持全部/5/15 分钟；Viewer 可整合 Snippets。
 - **Snippets**：Viewer Hotkey、Snippet Keyword、Show Keyword in Result、Matching + Word based、右侧 Auto Expansion 卡与 Options 面板、Collection 列表 + Name/Keyword/Snippet 表。
-- **Workflows**：Inspector 支持 Hotkey 录制/清除；深色空态（Alfred Gallery / Getting Started / Create / Template / Documentation 五卡）；选中后内嵌画布，左侧 Objects 调色板，Keyword → Action 节点链，节点可拖拽重排，右侧 Inspector，底部 Add Action / Test query / Run / Step / Cancel / Save；Debugger 面板记录顺序执行结果与单步输出；Inspector 可设断点，节点右上显示红点。
+- **Workflows**：顶部 66pt 标题栏（46pt 工作流图标、19pt 名称、Configure Workflow、右侧工具图标）；左侧 253pt 列表（深紫底、42pt 行高、34pt 图标、Help/+/- 底栏）；画布 `#1B1B1B`，按 `uidata` 的 `xpos/ypos` 放置 150×104pt 的浅色对象卡，对象用类型色（Keyword 米色、Open URL 绿色、Conditional 粉色、Automation Task 深灰）；灰色管道连线并在中点画结点。右侧 243pt 对象库：搜索、Getting Started/Prefabs、Favourites（紫→青渐变）、Triggers/Inputs/Actions/Automations/User Interface/Utilities/Outputs；27pt 紧凑分组/条目；对象配置改为深色 sheet，而不是常驻白色 Inspector；Configure Workflow 对无用户配置的工作流显示 “No Workflow Configuration” 浅色对话框。调试器为底部 32pt 工具条 + 76pt 日志区，含 Test query/Run/Step/Copy/Clear。
 - **Terminal**：Application、Prefix、Custom AppleScript。
 - **System**：系统命令关键词、确认、Eject、Eject All、排除卷。
 - **Previews**：Quick Look、rich previews、No Previews For/In。
@@ -109,5 +109,6 @@ Jfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern�
 - Music Mini Player 已有独立暗色面板（420×560）、当前曲目专辑封面与播放列表搜索；没有完整的专辑/播放列表浏览。
 - Remote 已有本地 URL 的 QR 配对面板；Alfred 的私有 iOS 配对协议明确不做。
 - Powerpack/Help 只保留功能清单与本机排障，不再逐字复刻 Alfred 营销页。
-- Appearance 的实时主题预览、Workflows 的画布/调试器、Remote 的 iOS 配对协议、Powerpack/Help 的营销与诊断内容只做了结构级对齐。
+- Appearance 的实时主题预览、Remote 的 iOS 配对协议、Powerpack/Help 的营销与诊断内容只做了结构级对齐。
+- Workflows 已按 Alfred 对象图实现导入、画布、条件分支和调试器；端口拖拽画线与私有 Automation Task 仍未实现。
 - Alfred 的部分图标为手绘位图，Jfred 使用 SF Symbols + 同色块，形状不同。

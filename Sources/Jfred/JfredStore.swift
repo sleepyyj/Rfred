@@ -6,63 +6,20 @@ enum ExternalKeys {
     static func named(_ suffix: String) -> String { brand + suffix }
 }
 
-struct ScriptNode: Sendable {
-    var uid: String
-    var type: String
-    var keyword: String
-    var withSpace: Bool
-    var filterLocally: Bool
-    var group: String
-    var cwd: String
-    var bundleID: String
-    var name: String
-    var script: String
-    var scriptType: Int
-    var icon: String
-    /// Alfred's `alfredfiltersresultsmatchmode`: 0 anchored, 1 word, 2 fuzzy.
-    var matchMode: Int
-}
-
-struct ImportedWorkflow: Sendable {
-    var bundle: String
-    var name: String
-    var author: String
-    var keyword: String
-    var enabled: Bool
-}
-
-struct ScriptCatalog: Sendable {
-    var nodes: [String: ScriptNode] = [:]
-    var next: [String: String] = [:]
-    var workflows: [ImportedWorkflow] = []
-
-    func hit(in query: String, disabledGroups: Set<String>) -> (node: ScriptNode, argument: String)? {
-        let filters = nodes.values.filter { node in
-            node.type.contains("scriptfilter") && !node.keyword.isEmpty && !disabledGroups.contains(node.group)
-        }
-        let pairs = filters.map { ($0.keyword, !$0.withSpace) }
-        guard let found = bestKeywordMatch(pairs, in: query) else { return nil }
-        guard let node = filters.first(where: { fold($0.keyword) == fold(found.keyword) }) else { return nil }
-        return (node, found.argument)
-    }
-}
-
 enum JfredStore {
     @MainActor
-    static func reloadCatalog() -> ScriptCatalog? {
-        catalog()
+    static func reloadWorkflows() -> [Workflow] {
+        workflows()
     }
 
     /// Jfred's workflow library: only workflows explicitly imported into the
     /// app. Alfred's own library is not loaded until the user asks for it.
-    static func catalog() -> ScriptCatalog {
-        var catalog = ScriptCatalog()
-        loadWorkflows(into: &catalog, from: importedWorkflowsURL())
-        return catalog
+    static func workflows() -> [Workflow] {
+        loadWorkflows(from: importedWorkflowsURL())
     }
 
     @MainActor
-    static func apply(_ model: AppModel) -> ScriptCatalog? {
+    static func apply(_ model: AppModel) -> [Workflow]? {
         guard let root = refreshSnapshot() else {
             model.importNote = "Launcher preferences were not found. The original folder was not changed."
             return nil
@@ -78,15 +35,15 @@ enum JfredStore {
         if !imported.isEmpty { model.snippets = imported }
         let hideMenu = readBool(plist(at: root.appendingPathComponent("preferences/appearance/options/prefs.plist")), key: "hidemenu")
         model.knowledge["statusItem"] = hideMenu ? "hidden" : "shown"
-        let catalog = catalog()
-        let keywords = catalog.nodes.values.filter { $0.type.contains("scriptfilter") && !$0.keyword.isEmpty }.count
+        let loaded = workflows()
+        let keywords = loaded.filter(\.enabled).flatMap(\.scriptFilters).filter { !$0.keyword.isEmpty }.count
         model.importNote = "Copied launcher settings into Jfred (\(imported.count) snippets, \(keywords) workflow keywords). Terminal is \(model.preferences.terminalApp). The original folder was not changed."
-        return catalog
+        return loaded
     }
 
     @MainActor
-    static func syncWorkflows(_ model: AppModel, _ imported: [ImportedWorkflow]) {
-        let bundles = Set(imported.map(\.bundle))
+    static func syncWorkflows(_ model: AppModel, _ imported: [Workflow], force: Bool = false) {
+        let bundles = Set(imported.map(\.bundleID))
         let legacy: Set<String> = ["dev", "epoch", "unit", "kill", "tabs", "profiles", "windows", "ui"]
         model.workflows.removeAll { workflow in
             guard let key = workflow.builtin else { return false }
@@ -94,30 +51,27 @@ enum JfredStore {
             return !bundles.contains(key)
         }
         for item in imported {
-            if let index = model.workflows.firstIndex(where: { $0.builtin == item.bundle }) {
-                model.workflows[index].name = item.name
-                model.workflows[index].author = item.author
-                if !item.keyword.isEmpty { model.workflows[index].keyword = item.keyword }
-                model.workflows[index].enabled = model.workflows[index].enabled && item.enabled
+            if let index = model.workflows.firstIndex(where: { $0.builtin == item.bundleID }) {
+                let existing = model.workflows[index]
+                var merged = item
+                merged.id = existing.id
+                merged.enabled = existing.enabled && item.enabled
+                merged.hotkey = existing.hotkey
+                if !force, !existing.objects.isEmpty,
+                   existing.definitionVersion >= item.definitionVersion,
+                   existing.version == item.version {
+                    // Keep in-app edits unless the workflow definition changed.
+                    continue
+                }
+                if existing.symbol != "puzzlepiece.extension" { merged.symbol = existing.symbol }
+                if existing.tint != WorkflowImporter.tint(for: item.bundleID) { merged.tint = existing.tint }
+                model.workflows[index] = merged
             } else {
-                model.workflows.append(Workflow(
-                    id: uuid(in: item.bundle) ?? UUID(),
-                    name: item.name,
-                    keyword: item.keyword,
-                    author: item.author,
-                    symbol: "puzzlepiece.extension",
-                    tint: tint(for: item.bundle),
-                    enabled: item.enabled,
-                    builtin: item.bundle
-                ))
+                model.workflows.append(item)
             }
         }
-    }
-
-    private static func tint(for bundle: String) -> String {
-        let palette = ["6C5CE7", "0984E3", "00B894", "E17055", "FDCB6E", "8E44AD", "2D3436", "C0392B", "16A085"]
-        let sum = bundle.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        return palette[sum % palette.count]
+        if model.selectedWorkflow == nil { model.selectedWorkflow = model.workflows.first?.id }
+        model.workflowEdited()
     }
 
     static func preferencesRoot() -> URL? {
@@ -223,8 +177,7 @@ enum JfredStore {
         // Inspect the archive before extraction: reject absolute paths, parent
         // traversal and absurd member counts instead of trusting ditto's
         // extraction behaviour with a hostile .alfredworkflow.
-        let listing = Shell.run("/usr/bin/unzip", ["-Z1", url.path], timeout: 10)
-        let members = listing.split(separator: "\n", omittingEmptySubsequences: true)
+        guard let members = archiveMembers(url) else { return nil }
         guard members.count <= 20_000 else { return nil }
         for member in members {
             let name = String(member)
@@ -250,6 +203,20 @@ enum JfredStore {
             }
         }
         return bundle
+    }
+
+    private static func archiveMembers(_ url: URL) -> [Substring]? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+        process.arguments = ["-Z1", url.path]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0, let text = String(data: data, encoding: .utf8) else { return nil }
+        return text.split(separator: "\n", omittingEmptySubsequences: true)
     }
 
     @MainActor
@@ -289,57 +256,21 @@ enum JfredStore {
         return count
     }
 
-    private static func loadWorkflows(into catalog: inout ScriptCatalog, from workflows: URL) {
+    private static func loadWorkflows(from workflows: URL) -> [Workflow] {
         guard let directories = try? FileManager.default.contentsOfDirectory(at: workflows, includingPropertiesForKeys: nil) else {
-            return
+            return []
         }
-        for directory in directories {
-            guard let info = plist(at: directory.appendingPathComponent("info.plist")) else { continue }
-            let enabled = !readBool(info, key: "disabled")
-            // Alfred keeps disabled/archived workflows in the same folder; they
-            // are not part of the active library, so don't import them.
-            guard enabled else { continue }
-            let bundle = info["bundleid"] as? String ?? directory.lastPathComponent
-            let group = bundle
-            let name = info["name"] as? String ?? bundle
-            let author = info["createdby"] as? String ?? "Imported"
-            let objects = info["objects"] as? [[String: Any]] ?? []
-            var firstKeyword = ""
-            for object in objects {
-                guard let uid = object["uid"] as? String else { continue }
-                let type = object["type"] as? String ?? ""
-                let config = object["config"] as? [String: Any] ?? [:]
-                let keyword = config["keyword"] as? String ?? ""
-                if firstKeyword.isEmpty, type.contains("scriptfilter"), !keyword.isEmpty { firstKeyword = keyword }
-                catalog.nodes[uid] = ScriptNode(
-                    uid: uid,
-                    type: type,
-                    keyword: keyword,
-                    withSpace: (config["withspace"] as? Bool) ?? true,
-                    filterLocally: (config[ExternalKeys.named("filtersresults")] as? Bool) ?? false,
-                    group: group,
-                    cwd: directory.path,
-                    bundleID: bundle,
-                    name: name,
-                    script: config["script"] as? String ?? "",
-                    scriptType: int(config["type"]) ?? 0,
-                    icon: "symbol:puzzlepiece.extension",
-                    matchMode: int(config["alfredfiltersresultsmatchmode"]) ?? 2
-                )
-            }
-            let connections = info["connections"] as? [String: Any] ?? [:]
-            for (source, value) in connections {
-                let links = value as? [[String: Any]] ?? []
-                let preferred = links.first { link in
-                    if link["modifiers"] == nil { return true }
-                    return int(link["modifiers"]) == 0
-                } ?? links.first
-                if let destination = preferred?["destinationuid"] as? String {
-                    catalog.next[source] = destination
-                }
-            }
-            catalog.workflows.append(ImportedWorkflow(bundle: bundle, name: name, author: author, keyword: firstKeyword, enabled: enabled))
+        var loaded: [Workflow] = []
+        for directory in directories.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            guard let info = plist(at: directory.appendingPathComponent("info.plist")),
+                  let workflow = WorkflowImporter.workflow(
+                    from: info,
+                    rootPath: directory.path,
+                    enabledOverride: !readBool(info, key: "disabled")
+                  ) else { continue }
+            loaded.append(workflow)
         }
+        return loaded.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     private static func readHotkey(root: URL) -> Hotkey? {
@@ -436,205 +367,5 @@ enum JfredStore {
         if let number = value as? Int { return number }
         if let number = value as? NSNumber { return number.intValue }
         return nil
-    }
-}
-
-enum ScriptRunner {
-    static func results(catalog: ScriptCatalog, node: ScriptNode, argument: String) -> [SearchResult]? {
-        let scriptArgument = node.filterLocally ? "" : (node.keyword == "uuid" && argument.isEmpty ? "1" : argument)
-        guard let output = execute(node, argument: scriptArgument),
-              let items = ScriptJSON.items(in: output) else { return nil }
-        let visible: [ScriptJSON.Item]
-        if node.filterLocally && !argument.isEmpty {
-            visible = items
-                .filter { matches($0, query: argument, mode: node.matchMode) }
-                .enumerated()
-                .sorted { lhs, rhs in
-                    let left = matchScore(lhs.element, query: argument, mode: node.matchMode)
-                    let right = matchScore(rhs.element, query: argument, mode: node.matchMode)
-                    if left == right { return lhs.offset < rhs.offset }
-                    return left > right
-                }
-                .map(\.element)
-        } else {
-            visible = items
-        }
-        return visible.enumerated().map { index, item in
-            row(catalog: catalog, node: node, item: item, index: index)
-        }
-    }
-
-    static func results(catalog: ScriptCatalog, uid: String, argument: String) -> [SearchResult]? {
-        guard let node = catalog.nodes[uid] else { return nil }
-        return results(catalog: catalog, node: node, argument: argument)
-    }
-
-    static func runAction(catalog: ScriptCatalog, uid: String, argument: String) {
-        guard let node = catalog.nodes[uid] else { return }
-        _ = execute(node, argument: argument)
-    }
-
-    private static func row(catalog: ScriptCatalog, node: ScriptNode, item: ScriptJSON.Item, index: Int) -> SearchResult {
-        let title = item.title.isEmpty ? node.keyword : item.title
-        if !item.valid {
-            return SearchResult(id: "run:\(node.uid):\(index)", title: title, subtitle: item.subtitle, icon: node.icon, kind: "text", payload: "", category: "action", score: 2)
-        }
-        switch action(catalog: catalog, from: node.uid, arg: item.arg) {
-        case .copy(let text):
-            if text.hasPrefix("/"), FileManager.default.fileExists(atPath: text) {
-                return SearchResult(id: "run:\(node.uid):\(index)", title: title, subtitle: item.subtitle, icon: "file:\(text)", kind: "file", payload: text, category: "action", score: 2)
-            }
-            return SearchResult(id: "run:\(node.uid):\(index)", title: title, subtitle: item.subtitle, icon: node.icon, kind: "copy", payload: text, category: "action", score: 2)
-        case .open(let url):
-            return SearchResult(id: "run:\(node.uid):\(index)", title: title, subtitle: item.subtitle.isEmpty ? url : item.subtitle, icon: "symbol:globe", kind: "url", payload: url, category: "navigation", score: 2)
-        case .script(let uid, let arg):
-            return SearchResult(id: "run:\(node.uid):\(index)", title: title, subtitle: item.subtitle, icon: node.icon, kind: "external", payload: uid + "\n" + arg, category: "action", score: 2)
-        case .chain(let uid, let arg):
-            return SearchResult(id: "run:\(node.uid):\(index)", title: title, subtitle: item.subtitle, icon: node.icon, kind: "externalchain", payload: uid + "\n" + arg, category: "action", score: 2)
-        }
-    }
-
-    private enum Action {
-        case copy(String)
-        case open(String)
-        case script(String, String)
-        case chain(String, String)
-    }
-
-    private static func action(catalog: ScriptCatalog, from uid: String, arg: String) -> Action {
-        guard var current = catalog.next[uid] else {
-            if arg.hasPrefix("http://") || arg.hasPrefix("https://") { return .open(arg) }
-            return .copy(arg)
-        }
-        for _ in 0..<8 {
-            guard let node = catalog.nodes[current] else { return .copy(arg) }
-            if node.type.contains("action.script") { return .script(node.uid, arg) }
-            if node.type.contains("openurl") { return .open(arg) }
-            if node.type.contains("scriptfilter") { return .chain(node.uid, arg) }
-            if node.type.contains("clipboard") { return .copy(arg) }
-            guard let destination = catalog.next[current] else { return .copy(arg) }
-            current = destination
-        }
-        return .copy(arg)
-    }
-
-    private static func matches(_ item: ScriptJSON.Item, query: String, mode: Int) -> Bool {
-        let haystack = fold(item.title + " " + item.subtitle + " " + item.arg)
-        let needle = fold(query)
-        guard !needle.isEmpty else { return true }
-        switch mode {
-        case 0:
-            return haystack.hasPrefix(needle)
-        case 1:
-            return words(in: haystack).contains { $0.hasPrefix(needle) }
-        default:
-            return wordStartFuzzy(haystack, needle)
-        }
-    }
-
-    /// Alfred's fuzzy mode: the first character must start a word, the rest of
-    /// the query may appear anywhere in order. This is why "d" only matches
-    /// "dogfooding" and not "uid" or "old".
-    private static func wordStartFuzzy(_ haystack: String, _ needle: String) -> Bool {
-        guard let first = needle.first else { return true }
-        var index = haystack.startIndex
-        var start: String.Index?
-        while index < haystack.endIndex {
-            if haystack[index] == first, isWordStart(haystack, index) {
-                start = index
-                break
-            }
-            index = haystack.index(after: index)
-        }
-        guard var cursor = start.map({ haystack.index(after: $0) }) else { return false }
-        for character in needle.dropFirst() {
-            guard let found = haystack[cursor...].firstIndex(of: character) else { return false }
-            cursor = haystack.index(after: found)
-        }
-        return true
-    }
-
-    private static func isWordStart(_ text: String, _ index: String.Index) -> Bool {
-        guard index != text.startIndex else { return true }
-        let previous = text[text.index(before: index)]
-        return !previous.isLetter && !previous.isNumber
-    }
-
-    private static func words(in text: String) -> [Substring] {
-        text.split { !$0.isLetter && !$0.isNumber }
-    }
-
-    private static func matchScore(_ item: ScriptJSON.Item, query: String, mode: Int) -> Double {
-        let haystack = fold(item.title + " " + item.subtitle + " " + item.arg)
-        let needle = fold(query)
-        switch mode {
-        case 0:
-            return 1000 - Double(haystack.count)
-        case 1:
-            if let word = words(in: haystack).first(where: { $0.hasPrefix(needle) }) {
-                let offset = haystack.distance(from: haystack.startIndex, to: haystack.range(of: word)?.lowerBound ?? haystack.startIndex)
-                return 1000 - Double(offset)
-            }
-            return 0
-        default:
-            guard let first = needle.first else { return 1 }
-            var index = haystack.startIndex
-            var start: String.Index?
-            while index < haystack.endIndex {
-                if haystack[index] == first, isWordStart(haystack, index) {
-                    start = index
-                    break
-                }
-                index = haystack.index(after: index)
-            }
-            guard let start else { return 0 }
-            var cursor = haystack.index(after: start)
-            var gaps = haystack.distance(from: haystack.startIndex, to: start)
-            for character in needle.dropFirst() {
-                guard let found = haystack[cursor...].firstIndex(of: character) else { return 0 }
-                gaps += haystack.distance(from: cursor, to: found)
-                cursor = haystack.index(after: found)
-            }
-            return 1000 - Double(gaps)
-        }
-    }
-
-    private static func execute(_ node: ScriptNode, argument: String) -> String? {
-        guard !node.script.isEmpty else { return nil }
-        let cache = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Caches/JfredLocal/Workflows/\(node.bundleID)")
-        let data = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/JfredLocal/Workflow Data/\(node.bundleID)")
-        try? FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
-        try? FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
-        var environment = ProcessInfo.processInfo.environment
-        let path = "/opt/homebrew/bin:/usr/local/bin:" + (environment["PATH"] ?? "/usr/bin:/bin")
-        environment["PATH"] = path
-        environment[ExternalKeys.named("_workflow_bundleid")] = node.bundleID
-        environment[ExternalKeys.named("_workflow_cache")] = cache.path
-        environment[ExternalKeys.named("_workflow_data")] = data.path
-        environment[ExternalKeys.named("_workflow_name")] = node.name
-        environment[ExternalKeys.named("_workflow_version")] = "1"
-        let output = Shell.run(
-            interpreter(node.scriptType),
-            ["-c", node.script, "jfred", argument],
-            timeout: 12,
-            directory: URL(fileURLWithPath: node.cwd, isDirectory: true),
-            environment: environment
-        )
-        return output
-    }
-
-    private static func interpreter(_ type: Int) -> String {
-        switch type {
-        case 0: return "/bin/bash"
-        case 1: return "/usr/bin/php"
-        case 2: return "/usr/bin/ruby"
-        case 3: return "/usr/bin/python3"
-        case 4: return "/usr/bin/perl"
-        case 5: return "/bin/zsh"
-        case 6: return "/usr/bin/osascript"
-        default: return "/bin/zsh"
-        }
     }
 }

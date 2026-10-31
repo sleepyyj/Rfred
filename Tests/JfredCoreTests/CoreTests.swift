@@ -435,3 +435,274 @@ private func asset(_ version: String, _ sha: String, _ size: Int64, architecture
         #expect(Calculator.allows("2+2", advanced: false) == true)
         #expect(Calculator.allows("=10/4", advanced: true) == true)
     }
+
+private struct FakeWorkflowRunner: WorkflowScriptRunning {
+    var output: String
+
+    func run(_ request: WorkflowScriptRequest) async -> WorkflowScriptOutput {
+        WorkflowScriptOutput(stdout: output, status: 0)
+    }
+}
+
+struct WorkflowGraphTests {
+    @Test func importsAlfredObjectGraph() throws {
+        let info: [String: Any] = [
+            "bundleid": "com.example.test",
+            "name": "Example",
+            "createdby": "Tester",
+            "description": "A test workflow",
+            "disabled": false,
+            "objects": [
+                ["uid": "KW", "type": "alfred.workflow.input.scriptfilter", "version": 3,
+                 "config": ["keyword": "ex", "withspace": false, "script": "echo", "type": 0, "scriptargtype": 1]],
+                ["uid": "ACT", "type": "alfred.workflow.output.clipboard", "version": 3,
+                 "config": ["clipboardtext": "{query}"]],
+            ],
+            "connections": [
+                "KW": [["destinationuid": "ACT", "modifiers": 0, "modifiersubtext": ""]]
+            ],
+            "uidata": [
+                "KW": ["xpos": 20, "ypos": 40],
+                "ACT": ["xpos": 300, "ypos": 40],
+            ],
+        ]
+        let workflow = try #require(WorkflowImporter.workflow(from: info, rootPath: "/tmp/example"))
+        #expect(workflow.bundleID == "com.example.test")
+        #expect(workflow.name == "Example")
+        #expect(workflow.objects.count == 2)
+        #expect(workflow.connections.count == 1)
+        #expect(workflow.keyword == "ex")
+        #expect(workflow.objects[0].kind == .scriptFilter)
+        #expect(workflow.objects[0].position.x == 20)
+        #expect(workflow.objects[1].kind == .clipboard)
+    }
+
+    @Test func scriptFilterResultsAndGraphRun() async throws {
+        let filter = WorkflowObject(kind: .scriptFilter, config: [
+            "keyword": .string("gh"), "withspace": .boolean(true),
+            "script": .string("search"), "type": .integer(0), "scriptargtype": .integer(1),
+        ])
+        let script = WorkflowObject(kind: .runScript, config: [
+            "script": .string("handle"), "type": .integer(0), "scriptargtype": .integer(1),
+        ])
+        let clipboard = WorkflowObject(kind: .clipboard, config: ["clipboardtext": .string("copied: {query}")])
+        let workflow = Workflow(
+            name: "GitHub", author: "Tester", symbol: "puzzlepiece.extension", tint: "561D7E",
+            enabled: true, builtin: nil,
+            objects: [filter, script, clipboard],
+            connections: [
+                WorkflowConnection(source: filter.id, destination: script.id),
+                WorkflowConnection(source: script.id, destination: clipboard.id),
+            ],
+            rootPath: "/tmp/example"
+        )
+        let match = try #require(WorkflowEngine.match(in: [workflow], query: "gh swift"))
+        #expect(match.invocation.keyword == "gh")
+        #expect(match.invocation.argument == "swift")
+
+        let filterOutput = """
+        {"items":[{"title":"Swift","subtitle":"Language","arg":"swift-arg","valid":true}],"variables":{"session":"1"}}
+        """
+        let filterEngine = WorkflowEngine(workflow: workflow, runner: FakeWorkflowRunner(output: filterOutput))
+        let results = try #require(await filterEngine.results(for: match.invocation))
+        #expect(results.items.count == 1)
+        #expect(results.items[0].argument == "swift-arg")
+        #expect(results.variables["session"] == "1")
+
+        let runEngine = WorkflowEngine(workflow: workflow, runner: FakeWorkflowRunner(output: "handled"))
+        let state = await runEngine.run(invocation: match.invocation, item: results.items[0])
+        #expect(state.logs.count == 2)
+        #expect(state.effects == [.copy("copied: handled")])
+    }
+
+    @Test func conditionalUsesSourceOutputBranch() async throws {
+        let conditionUID = "BRANCH-RED"
+        let keyword = WorkflowObject(kind: .keyword, config: ["keyword": .string("colour")])
+        let conditional = WorkflowObject(kind: .conditional, config: [
+            "conditions": .array([
+                .object([
+                    "uid": .string(conditionUID),
+                    "inputstring": .string("{query}"),
+                    "matchstring": .string("red"),
+                    "matchmode": .integer(0),
+                    "outputlabel": .string("red"),
+                ])
+            ])
+        ])
+        let red = WorkflowObject(kind: .clipboard, config: ["clipboardtext": .string("red path")])
+        let other = WorkflowObject(kind: .clipboard, config: ["clipboardtext": .string("other path")])
+        let workflow = Workflow(
+            name: "Conditional", author: "Tester", symbol: "bolt.fill", tint: "561D7E",
+            enabled: true, builtin: nil,
+            objects: [keyword, conditional, red, other],
+            connections: [
+                WorkflowConnection(source: keyword.id, destination: conditional.id),
+                WorkflowConnection(source: conditional.id, destination: red.id, sourceOutputUID: conditionUID),
+                WorkflowConnection(source: conditional.id, destination: other.id),
+            ]
+        )
+        let invocation = WorkflowInvocation(workflowID: workflow.id, inputID: keyword.id, keyword: "colour", argument: "red")
+        let engine = WorkflowEngine(workflow: workflow, runner: FakeWorkflowRunner(output: ""))
+        let state = await engine.run(invocation: invocation)
+        #expect(state.effects == [.copy("red path")])
+    }
+
+    @Test func scriptFilterParsesJSONAndFilters() throws {
+        let text = """
+        ignoring log line
+        {"variables":{"fruit":"banana"},"items":[
+          {"title":"My Family Photos","subtitle":"Pictures","arg":["one","two"],"mods":{"cmd":{"arg":"three"}}},
+          {"title":"Family Videos","arg":"video"}
+        ]}
+        """
+        let result = WorkflowScriptFilterParser.parse(text)
+        #expect(result.items.count == 2)
+        #expect(result.variables["fruit"] == "banana")
+        #expect(result.items[0].arguments == ["one", "two"])
+        #expect(result.items[0].applying(modifier: .command).argument == "three")
+        #expect(WorkflowScriptFilterParser.filter(result.items, query: "photos", mode: 0).count == 1)
+        #expect(WorkflowScriptFilterParser.filter(result.items, query: "family", mode: 1).count == 1)
+    }
+
+    @Test func legacyWorkflowDecodesAndKeepsActions() throws {
+        let json = """
+        {"id":"00000000-0000-0000-0000-000000000001","name":"Legacy","keyword":"do","author":"Me",
+         "symbol":"bolt.fill","tint":"561D7E","enabled":true,"actions":[
+           {"id":"00000000-0000-0000-0000-000000000002","kind":"copy","value":"{query}"}
+         ]}
+        """
+        let workflow = try JSONDecoder().decode(Workflow.self, from: Data(json.utf8))
+        #expect(workflow.name == "Legacy")
+        #expect(workflow.keyword == "do")
+        #expect(workflow.definitionVersion == 0)
+        #expect(workflow.objects.count == 2)
+        #expect(workflow.connections.count == 1)
+        #expect(workflow.actions.count == 1)
+        #expect(workflow.actions[0].kind == .copy)
+
+        let encoded = try JSONEncoder().encode(workflow)
+        let decoded = try JSONDecoder().decode(Workflow.self, from: encoded)
+        #expect(decoded.name == "Legacy")
+        #expect(decoded.objects.count == 2)
+    }
+
+    @Test func templateExpandsVariablesAndQuotedQuery() {
+        let variables = ["name": "World"]
+        let result = WorkflowTemplate.expand("echo \"{query}\" {var:name}", query: "hello world", variables: variables, escaping: 127)
+        #expect(result.contains("hello world"))
+        #expect(result.contains("World"))
+        #expect(result.hasPrefix("echo \"hello world\""))
+        #expect(WorkflowTemplate.conditionalMatches("Left", pattern: "left", mode: 0, caseSensitive: false))
+        #expect(WorkflowTemplate.conditionalMatches("10", pattern: "5", mode: 2, caseSensitive: false))
+        #expect(WorkflowTemplate.conditionalMatches("left", pattern: "le", mode: 4, caseSensitive: false))
+        #expect(!WorkflowTemplate.conditionalMatches("right", pattern: "left", mode: 0, caseSensitive: false))
+    }
+}
+
+extension WorkflowGraphTests {
+    @Test func importsInstalledJfredWorkflowsWhenPresent() throws {
+        let root = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+            .appendingPathComponent("Library/Application Support/Jfred/ImportedWorkflows", isDirectory: true)
+        guard let entries = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return }
+        for entry in entries where entry.hasDirectoryPath {
+            let plist = entry.appendingPathComponent("info.plist")
+            guard let data = try? Data(contentsOf: plist),
+                  let info = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] else { continue }
+            let workflow = try #require(WorkflowImporter.workflow(from: info, rootPath: entry.path))
+            #expect(!workflow.bundleID.isEmpty)
+            #expect(!workflow.objects.isEmpty)
+            for connection in workflow.connections {
+                #expect(workflow.object(id: connection.source) != nil)
+                #expect(workflow.object(id: connection.destination) != nil)
+            }
+        }
+    }
+
+    @Test func runPayloadRoundTripsItemAndModifiers() throws {
+        let item = WorkflowItem(
+            uid: "one",
+            title: "One",
+            arguments: ["arg"],
+            variables: ["key": "value"],
+            mods: ["cmd": WorkflowItemMod(arguments: ["cmd-arg"])]
+        )
+        let payload = WorkflowRunPayload(
+            workflowID: UUID(),
+            inputID: UUID(),
+            keyword: "wf",
+            argument: "query",
+            item: item
+        )
+        let decoded = try #require(payload.json.flatMap(WorkflowRunPayload.decode))
+        #expect(decoded.workflowID == payload.workflowID)
+        #expect(decoded.item?.arguments == ["arg"])
+        #expect(decoded.item?.applying(modifier: .command).argument == "cmd-arg")
+    }
+}
+
+extension WorkflowGraphTests {
+    @Test func processRunnerExecutesBashWithArguments() async {
+        let output = await ProcessWorkflowRunner().run(WorkflowScriptRequest(
+            workflowID: UUID(),
+            objectID: UUID(),
+            bundleID: "com.example.runner",
+            workflowName: "Runner",
+            workflowVersion: "1.0",
+            keyword: "run",
+            language: .bash,
+            source: #"printf '{"items":[{"title":"%s","arg":"%s"}]}' "$1" "$1""#,
+            sourceFile: "",
+            argumentMode: .argv,
+            escaping: 0,
+            query: "hello world",
+            arguments: ["hello world"],
+            variables: [:],
+            directory: URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true),
+            environment: [
+                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+                "alfred_workflow_cache": NSTemporaryDirectory() + "jfred-runner-test",
+            ]
+        ))
+        #expect(output.isSuccess)
+        let result = WorkflowScriptFilterParser.parse(output.stdout)
+        #expect(result.items.first?.title == "hello world")
+        #expect(result.items.first?.argument == "hello world")
+    }
+}
+
+extension WorkflowGraphTests {
+    @Test func xmlScriptFilterUsesFirstDocumentAndArgChild() throws {
+        let xml = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <items>
+          <item valid="yes"><title>2023-11-15T06:13:20</title><subtitle>Local time</subtitle><arg>2023-11-15T06:13:20</arg></item>
+        </items>
+        <?xml version="1.0" encoding="utf-8"?>
+        <items><item valid="no"><title>Error item</title></item></items>
+        """
+        let result = WorkflowScriptFilterParser.parse(xml)
+        #expect(result.items.count == 1)
+        #expect(result.items[0].title == "2023-11-15T06:13:20")
+        #expect(result.items[0].argument == "2023-11-15T06:13:20")
+    }
+
+    @Test func allDefaultOutputsRun() async throws {
+        let filter = WorkflowObject(kind: .scriptFilter, config: ["keyword": .string("ts"), "script": .string("x")])
+        let clipboard = WorkflowObject(kind: .clipboard, config: ["clipboardtext": .string("{query}")])
+        let notification = WorkflowObject(kind: .notification, config: ["title": .string("Time: {query}"), "text": .string("Copied")])
+        let workflow = Workflow(
+            name: "Fanout", author: "Tester", symbol: "bolt.fill", tint: "561D7E",
+            enabled: true, builtin: nil,
+            objects: [filter, clipboard, notification],
+            connections: [
+                WorkflowConnection(source: filter.id, destination: clipboard.id),
+                WorkflowConnection(source: filter.id, destination: notification.id),
+            ]
+        )
+        let item = WorkflowItem(title: "Result", arguments: ["1700000000"])
+        let invocation = WorkflowInvocation(workflowID: workflow.id, inputID: filter.id, keyword: "ts", argument: "1700000000")
+        let state = await WorkflowEngine(workflow: workflow, runner: FakeWorkflowRunner(output: "")).run(invocation: invocation, item: item)
+        #expect(state.effects.contains(.copy("1700000000")))
+        #expect(state.effects.contains(.notification(title: "Time: 1700000000", text: "Copied")))
+    }
+}

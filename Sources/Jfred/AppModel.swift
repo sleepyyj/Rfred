@@ -147,7 +147,19 @@ final class AppModel {
     var workflowSnapshot: Workflow?
     var workflowIsNew = false
     var showTemplates = false
-    var scriptCatalog = ScriptCatalog()
+    var selectedWorkflowObject: UUID?
+    var workflowDebugState: WorkflowRunState?
+    var debugLoggedCount = 0
+    var debugAppliedEffects = 0
+    var workflowDragObjectID: UUID?
+    var workflowDragStart: WorkflowPoint?
+    var workflowPaletteVisible = true
+    var workflowPaletteFilter = ""
+    var workflowPaletteExpanded: Set<String> = ["Favourites"]
+    var workflowConfigPresented = false
+    var workflowConfigShowsWorkflow = false
+    var workflowConfigEditsMetadata = false
+    var workflowConfigSnapshot: Workflow?
     var importNote = ""
     var showStatusItem: Bool {
         get { knowledge["statusItem"] != "hidden" }
@@ -228,39 +240,36 @@ final class AppModel {
             historyCursor = nil
         }
         let raw = query
-        let catalog = scriptCatalog
-        let disabledGroups = Set(workflows.compactMap { workflow -> String? in
+        let disabledBuiltins = Set(workflows.compactMap { workflow -> String? in
             guard let builtin = workflow.builtin, !workflow.enabled else { return nil }
             return builtin
         })
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let context = makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil, forced: nil)
-        let useCatalog = !raw.hasPrefix(" ") && !trimmed.hasPrefix(">")
-        if useCatalog, let hit = catalog.hit(in: trimmed, disabledGroups: disabledGroups) {
-            publishResults([statusRow(id: "run:pending", title: "Running…", subtitle: hit.node.keyword, icon: hit.node.icon, category: "action")])
-            let node = hit.node
-            let argument = hit.argument
-            let job = Task.detached {
-                if node.keyword.hasPrefix("gh ") {
-                    try? await Task.sleep(nanoseconds: 250_000_000)
+        let useWorkflows = !raw.hasPrefix(" ") && !trimmed.hasPrefix(">")
+        if useWorkflows, let match = WorkflowRuntime.match(in: workflows, query: trimmed, disabledBuiltins: disabledBuiltins) {
+            if match.input.kind == .scriptFilter || match.input.kind == .listFilter {
+                publishResults([statusRow(id: "run:pending", title: "Running…", subtitle: match.invocation.keyword, icon: "symbol:\(match.workflow.symbol)", category: "action")])
+                let workflow = match.workflow
+                let invocation = match.invocation
+                let job = Task.detached {
+                    await WorkflowRuntime.engine(for: workflow).results(for: invocation)
                 }
-                return ScriptRunner.results(catalog: catalog, node: node, argument: argument)
-            }
-            Task {
-                let ran = await job.value
-                guard token == self.generation else { return }
-                if let ran {
-                    let rows = ran.isEmpty
-                        ? [self.statusRow(id: "run:empty", title: "No matches", subtitle: node.keyword, icon: node.icon, category: "action")]
-                        : ran
+                Task {
+                    let ran = await job.value
+                    guard token == self.generation else { return }
+                    let result = ran ?? WorkflowScriptFilterResult(items: [])
+                    let rows = result.items.isEmpty
+                        ? [self.statusRow(id: "run:empty", title: "No matches", subtitle: match.invocation.keyword, icon: "symbol:\(match.workflow.symbol)", category: "action")]
+                        : WorkflowRuntime.rows(for: match, result: result)
                     self.publishResults(rows)
-                    return
                 }
-                var plain = context
-                plain.spotlight = nil
-                self.publishResults(Search.results(for: raw, context: plain))
+                return
             }
-            return
+            if let row = WorkflowRuntime.directRow(for: match) {
+                publishResults([row])
+                return
+            }
         }
 
         if !Search.exclusiveSlowQuery(raw: raw, preferences: context.preferences) {
@@ -720,33 +729,26 @@ final class AppModel {
         case "largetype":
             hideLauncher(reactivate: false)
             showLarge(item.payload)
-        case "external":
-            let parts = item.payload.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
-            let uid = String(parts.first ?? "")
-            let arg = parts.count > 1 ? String(parts[1]) : ""
-            let catalog = scriptCatalog
-            hideLauncher(reactivate: false)
-            Task.detached {
-                ScriptRunner.runAction(catalog: catalog, uid: uid, argument: arg)
-                await MainActor.run { self.debugLine = "Ran the workflow action" }
+        case "workflow":
+            guard let payload = WorkflowRunPayload.decode(item.payload) else {
+                debugLine = "The workflow result was malformed."
+                return
             }
-        case "externalchain":
-            let parts = item.payload.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
-            let uid = String(parts.first ?? "")
-            let arg = parts.count > 1 ? String(parts[1]) : ""
-            let catalog = scriptCatalog
-            Task.detached {
-                let rows = ScriptRunner.results(catalog: catalog, uid: uid, argument: arg)
+            hideLauncher(reactivate: false)
+            let running = workflows
+            Task {
+                guard let state = await WorkflowRuntime.run(payload: payload, workflows: running, forced: forced) else {
+                    await MainActor.run { self.debugLine = "The workflow could not be found." }
+                    return
+                }
                 await MainActor.run {
-                    guard let rows else {
-                        self.debugLine = "The workflow action failed"
-                        return
+                    for entry in state.logs {
+                        let prefix = entry.isError ? "⚠︎" : "•"
+                        let output = entry.output.isEmpty ? "" : "  ↳ " + entry.output.replacingOccurrences(of: "\n", with: " ")
+                        self.debugLines.append("\(prefix) \(entry.title): \(entry.detail)\(output)")
                     }
-                    self.results = rows.isEmpty
-                        ? [SearchResult(id: "run:empty", title: "No matches", subtitle: arg, icon: "symbol:magnifyingglass", kind: "text", payload: "", category: "action", score: 1)]
-                        : rows
-                    self.selection = 0
-                    self.launcher?.layout()
+                    self.debugLine = state.logs.last.map { "\($0.title): \($0.detail)" } ?? "Workflow finished"
+                    self.applyWorkflowEffects(state.effects)
                 }
             }
         case "text":
@@ -791,6 +793,52 @@ final class AppModel {
         scheduleSave()
         applyHotkeys()
         if selectedWorkflow == nil { selectedWorkflow = workflows.first?.id }
+    }
+
+    func workflowEdited() {
+        scheduleSave()
+    }
+
+    func openWorkflowConfig(showsWorkflow: Bool) {
+        guard let id = editingWorkflowID ?? selectedWorkflow,
+              let workflow = workflows.first(where: { $0.id == id }) else { return }
+        workflowConfigSnapshot = workflow
+        workflowConfigShowsWorkflow = showsWorkflow
+        workflowConfigEditsMetadata = false
+        workflowConfigPresented = true
+    }
+
+    func openWorkflowMetadata() {
+        guard let id = editingWorkflowID ?? selectedWorkflow,
+              let workflow = workflows.first(where: { $0.id == id }) else { return }
+        workflowConfigSnapshot = workflow
+        workflowConfigShowsWorkflow = true
+        workflowConfigEditsMetadata = true
+        workflowConfigPresented = true
+    }
+
+    func cancelWorkflowConfig() {
+        if let snapshot = workflowConfigSnapshot,
+           let index = workflows.firstIndex(where: { $0.id == snapshot.id }) {
+            workflows[index] = snapshot
+        }
+        workflowConfigSnapshot = nil
+        workflowConfigEditsMetadata = false
+        workflowConfigPresented = false
+    }
+
+    func saveWorkflowConfig() {
+        workflowConfigSnapshot = nil
+        workflowEdited()
+        workflowConfigPresented = false
+    }
+
+    func togglePaletteSection(_ title: String) {
+        if workflowPaletteExpanded.contains(title) {
+            workflowPaletteExpanded.remove(title)
+        } else {
+            workflowPaletteExpanded.insert(title)
+        }
     }
 
     private func openInSourceBrowser(_ url: URL, linkID: String) {
@@ -1246,6 +1294,7 @@ final class AppModel {
         if flags.contains(.command) { return preferences.modifierCommand }
         if flags.contains(.option) { return preferences.modifierOption }
         if flags.contains(.control) { return preferences.modifierControl }
+        if flags.contains(.shift) { return "shift" }
         return "primary"
     }
 
@@ -1276,10 +1325,17 @@ final class AppModel {
     }
 
     func workflowDirectory(_ workflow: Workflow) -> URL? {
-        guard let group = workflow.builtin else { return nil }
-        return scriptCatalog.nodes.values
-            .first { $0.group == group }
-            .map { URL(fileURLWithPath: $0.cwd, isDirectory: true) }
+        if let rootPath = workflow.rootPath {
+            return URL(fileURLWithPath: rootPath, isDirectory: true)
+        }
+        guard let bundle = workflow.builtin else { return nil }
+        let entries = (try? FileManager.default.contentsOfDirectory(at: JfredStore.importedWorkflowsURL(), includingPropertiesForKeys: nil)) ?? []
+        return entries.first { entry in
+            guard let data = try? Data(contentsOf: entry.appendingPathComponent("info.plist")),
+                  let propertyList = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
+                  let info = propertyList as? [String: Any] else { return false }
+            return info["bundleid"] as? String == bundle
+        }
     }
 
     func importWorkflow(at url: URL) {
@@ -1287,9 +1343,7 @@ final class AppModel {
             importNote = "Could not import \(url.lastPathComponent)."
             return
         }
-        let catalog = JfredStore.catalog()
-        scriptCatalog = catalog
-        JfredStore.syncWorkflows(self, catalog.workflows)
+        JfredStore.syncWorkflows(self, JfredStore.workflows(), force: true)
         if let imported = workflows.first(where: { $0.builtin == bundle }) {
             selectedWorkflow = imported.id
         }
@@ -1298,142 +1352,14 @@ final class AppModel {
         importNote = "Imported \(url.lastPathComponent)."
     }
 
-    func moveWorkflowAction(from source: Int, to target: Int) {
-        guard let id = editingWorkflowID ?? selectedWorkflow,
-              let wf = workflows.firstIndex(where: { $0.id == id }),
-              workflows[wf].actions.indices.contains(source),
-              workflows[wf].actions.indices.contains(target),
-              source != target else { return }
-        let item = workflows[wf].actions.remove(at: source)
-        workflows[wf].actions.insert(item, at: target)
-        workflowSelection = target
-    }
-
-    func runWorkflowDebug(_ id: UUID) {
-        guard let workflow = workflows.first(where: { $0.id == id }) else { return }
-        let resuming = debugPaused && debugWorkflowID == id
-        if !resuming {
-            debuggerVisible = true
-            debugLines = ["Running \(workflow.name) with query ‘\(debugQuery)’"]
-            debugCursor = 0
-            debugWorkflowID = id
-        }
-        debugPaused = false
-        let query = debugQuery
-        let actions = workflow.actions
-        let start = resuming ? debugCursor : 0
-        let resumeFrom = start
-        Task {
-            var index = start
-            while index < actions.count {
-                if self.debugBreakpoints.contains(index) && !(resuming && index == resumeFrom) {
-                    await MainActor.run {
-                        self.debugCursor = index
-                        self.debugPaused = true
-                        self.debugLines.append("Paused at breakpoint before action \(index + 1).")
-                    }
-                    return
-                }
-                await MainActor.run { self.debugCursor = index }
-                await executeDebugAction(actions[index], query: query, index: index)
-                index += 1
-                await MainActor.run { self.debugCursor = index }
-            }
-            await MainActor.run {
-                self.debugCursor = actions.count
-                self.debugPaused = false
-                self.debugLines.append("Finished.")
-            }
-        }
-    }
-
-    func setWorkflowHotkey(_ id: UUID, keyCode: UInt16, modifiers: UInt) {
-        guard let index = workflows.firstIndex(where: { $0.id == id }) else { return }
-        workflows[index].hotkey = Hotkey(keyCode: keyCode, modifiers: modifiers)
-        workflowsChanged()
-    }
-
-    func clearWorkflowHotkey(_ id: UUID) {
-        guard let index = workflows.firstIndex(where: { $0.id == id }) else { return }
-        workflows[index].hotkey = nil
-        workflowsChanged()
-    }
-
-    func duplicateWorkflowAction(_ index: Int) {
-        guard let id = editingWorkflowID ?? selectedWorkflow,
-              let wf = workflows.firstIndex(where: { $0.id == id }),
-              workflows[wf].actions.indices.contains(index) else { return }
-        let action = workflows[wf].actions[index]
-        workflows[wf].actions.insert(WorkflowAction(kind: action.kind, value: action.value), at: index + 1)
-        workflowSelection = index + 1
-    }
-
-    func setBreakpoint(_ index: Int, _ enabled: Bool) {
-        if enabled { debugBreakpoints.insert(index) } else { debugBreakpoints.remove(index) }
-    }
-
-    func stepWorkflowDebug(_ id: UUID) {
-        guard let workflow = workflows.first(where: { $0.id == id }) else { return }
-        if debugWorkflowID != id {
-            debugWorkflowID = id
-            debugCursor = 0
-            debugLines = ["Stepping \(workflow.name) with query ‘\(debugQuery)’"]
-        }
-        debuggerVisible = true
-        guard debugCursor < workflow.actions.count else {
-            debugLines.append("Finished.")
-            return
-        }
-        let index = debugCursor
-        let action = workflow.actions[index]
-        let query = debugQuery
-        Task {
-            await executeDebugAction(action, query: query, index: index)
-            await MainActor.run {
-                self.debugCursor = index + 1
-                self.debugPaused = false
-                if self.debugCursor >= workflow.actions.count { self.debugLines.append("Finished.") }
-            }
-        }
-    }
-
-    private func executeDebugAction(_ action: WorkflowAction, query: String, index: Int) async {
-        let value = action.value.replacingOccurrences(of: "{query}", with: query)
-        await MainActor.run { self.debugLines.append("\(index + 1). \(action.kind.rawValue): \(value)") }
-        switch action.kind {
-        case .openURL:
-            if let url = URL(string: value) { _ = await MainActor.run { NSWorkspace.shared.open(url) } }
-        case .openApp:
-            await MainActor.run {
-                let url = value.hasPrefix("/") ? URL(fileURLWithPath: value) : URL(fileURLWithPath: "/Applications/\(value).app")
-                NSWorkspace.shared.open(url)
-            }
-        case .copy:
-            await MainActor.run { self.writeClipboard(value) }
-        case .largeType:
-            await MainActor.run { self.showLarge(value) }
-        case .terminal:
-            await MainActor.run { self.runInTerminal(value) }
-        case .shell:
-            let output = await Task.detached { Shell.run("/bin/zsh", ["-lc", value], timeout: 12) }.value
-            await MainActor.run { self.debugLines.append("   ↳ \(output.isEmpty ? "(no output)" : String(output.prefix(300)))") }
-        case .appleScript:
-            let output = await Task.detached { Shell.osascript(value, timeout: 12) }.value
-            await MainActor.run { self.debugLines.append("   ↳ \(output.isEmpty ? "(no output)" : String(output.prefix(300)))") }
-        }
-    }
-
     func reloadWorkflowsFromAlfred() {
-        guard let catalog = JfredStore.reloadCatalog() else { return }
-        scriptCatalog = catalog
-        JfredStore.syncWorkflows(self, catalog.workflows)
+        JfredStore.syncWorkflows(self, JfredStore.reloadWorkflows(), force: true)
+        importNote = "Reloaded \(workflows.filter { $0.builtin != nil }.count) workflows."
     }
 
     func importAlfredLibrary() {
         let count = JfredStore.importAllFromAlfred()
-        let catalog = JfredStore.catalog()
-        scriptCatalog = catalog
-        JfredStore.syncWorkflows(self, catalog.workflows)
+        JfredStore.syncWorkflows(self, JfredStore.reloadWorkflows(), force: true)
         importNote = "Imported \(count) workflows from Alfred."
         section = .workflows
         showPreferences()
@@ -1445,10 +1371,275 @@ final class AppModel {
         copy.id = UUID()
         copy.name += " Copy"
         copy.builtin = nil
+        copy.bundleID = ""
+        copy.rootPath = nil
         copy.hotkey = nil
-        copy.actions = copy.actions.map { WorkflowAction(kind: $0.kind, value: $0.value) }
+        var remap: [UUID: UUID] = [:]
+        for objectIndex in copy.objects.indices {
+            let old = copy.objects[objectIndex].id
+            let new = UUID()
+            remap[old] = new
+            copy.objects[objectIndex].id = new
+            copy.objects[objectIndex].alfredUID = new.uuidString
+        }
+        copy.connections = copy.connections.map { connection in
+            var connection = connection
+            connection.id = UUID()
+            connection.source = remap[connection.source] ?? connection.source
+            connection.destination = remap[connection.destination] ?? connection.destination
+            return connection
+        }
         workflows.insert(copy, at: index + 1)
         selectedWorkflow = copy.id
+        selectedWorkflowObject = nil
+    }
+
+    func addWorkflowObject(_ kind: WorkflowObjectKind) {
+        guard let id = editingWorkflowID ?? selectedWorkflow,
+              let index = workflows.firstIndex(where: { $0.id == id }) else { return }
+        var config: [String: WorkflowValue] = [:]
+        switch kind {
+        case .keyword:
+            config = ["keyword": .string("keyword"), "withspace": .boolean(true)]
+        case .scriptFilter:
+            config = ["keyword": .string("keyword"), "script": .string("echo '{\"items\": []}'"), "type": .integer(0), "scriptargtype": .integer(0)]
+        case .runScript:
+            config = ["script": .string("echo \"{query}\""), "type": .integer(0), "scriptargtype": .integer(0)]
+        case .openURL:
+            config = ["url": .string("https://www.google.com/search?q={query}")]
+        case .clipboard:
+            config = ["clipboardtext": .string("{query}")]
+        case .largeType:
+            config = ["text": .string("{query}")]
+        case .notification:
+            config = ["title": .string("Jfred"), "text": .string("{query}")]
+        case .argument:
+            config = ["argument": .string("{query}"), "passthroughargument": .boolean(false)]
+        case .filter:
+            config = ["inputstring": .string("{query}"), "matchstring": .string(".*"), "matchmode": .integer(4)]
+        case .delay:
+            config = ["seconds": .number(0.5)]
+        default:
+            break
+        }
+        let selected = workflows[index].objects.first { $0.id == selectedWorkflowObject }
+        let position: WorkflowPoint
+        if let selected {
+            position = WorkflowPoint(x: selected.position.x + 240, y: selected.position.y)
+        } else {
+            position = WorkflowPoint(x: 40, y: 40)
+        }
+        let object = WorkflowObject(kind: kind, config: config, position: position)
+        workflows[index].objects.append(object)
+        if let selected, workflows[index].defaultOutgoing(from: selected.id) == nil {
+            workflows[index].connect(selected.id, object.id)
+        }
+        selectedWorkflowObject = object.id
+        workflowEdited()
+    }
+
+    func removeWorkflowObject(_ id: UUID) {
+        guard let workflowID = editingWorkflowID ?? selectedWorkflow,
+              let index = workflows.firstIndex(where: { $0.id == workflowID }) else { return }
+        workflows[index].removeObject(id)
+        if selectedWorkflowObject == id { selectedWorkflowObject = nil }
+        workflowEdited()
+    }
+
+    func duplicateWorkflowObject(_ id: UUID) {
+        guard let workflowID = editingWorkflowID ?? selectedWorkflow,
+              let index = workflows.firstIndex(where: { $0.id == workflowID }),
+              let object = workflows[index].objects.first(where: { $0.id == id }) else { return }
+        var copy = object
+        copy.id = UUID()
+        copy.alfredUID = copy.id.uuidString
+        copy.position = WorkflowPoint(x: object.position.x + 30, y: object.position.y + 30)
+        workflows[index].objects.append(copy)
+        if let outgoing = workflows[index].defaultOutgoing(from: id) {
+            workflows[index].connect(copy.id, outgoing.destination)
+        }
+        selectedWorkflowObject = copy.id
+        workflowEdited()
+    }
+
+    func moveWorkflowObject(_ id: UUID, to position: WorkflowPoint) {
+        guard let workflowID = editingWorkflowID ?? selectedWorkflow,
+              let index = workflows.firstIndex(where: { $0.id == workflowID }),
+              let objectIndex = workflows[index].objects.firstIndex(where: { $0.id == id }) else { return }
+        workflows[index].objects[objectIndex].position = position
+        workflowEdited()
+    }
+
+    func connectWorkflowObject(_ source: UUID, to destination: UUID, modifiers: Int = 0) {
+        guard let workflowID = editingWorkflowID ?? selectedWorkflow,
+              let index = workflows.firstIndex(where: { $0.id == workflowID }) else { return }
+        workflows[index].connect(source, destination, modifiers: modifiers)
+        workflowEdited()
+    }
+
+    func disconnectWorkflowObject(_ source: UUID, destination: UUID) {
+        guard let workflowID = editingWorkflowID ?? selectedWorkflow,
+              let index = workflows.firstIndex(where: { $0.id == workflowID }) else { return }
+        workflows[index].disconnect(source, destination)
+        workflowEdited()
+    }
+
+    func runWorkflowDebug(_ id: UUID) {
+        guard let workflow = workflows.first(where: { $0.id == id }),
+              let input = workflow.searchInputs.first ?? workflow.objects.first else { return }
+        let invocation = WorkflowInvocation(
+            workflowID: workflow.id,
+            inputID: input.id,
+            keyword: input.keyword,
+            argument: debugQuery,
+            variables: workflow.variables
+        )
+        let resuming = debugPaused && debugWorkflowID == id && workflowDebugState != nil
+        if !resuming {
+            debuggerVisible = true
+            debugLines = ["Running \(workflow.name) with query ‘\(debugQuery)’"]
+            debugCursor = 0
+            debugWorkflowID = id
+            debugPaused = false
+            debugLoggedCount = 0
+            debugAppliedEffects = 0
+            workflowDebugState = WorkflowRuntime.engine(for: workflow).initialState(invocation: invocation)
+        }
+        guard var state = workflowDebugState else { return }
+        debugPaused = false
+        let engine = WorkflowRuntime.engine(for: workflow)
+        var skipBreakpoint = resuming
+        Task {
+            while !state.finished {
+                if !skipBreakpoint, let next = state.pending.first,
+                   let objectIndex = workflow.objects.firstIndex(where: { $0.id == next.objectID }),
+                   self.debugBreakpoints.contains(objectIndex) {
+                    await MainActor.run {
+                        self.debugCursor = state.processed
+                        self.debugPaused = true
+                        self.workflowDebugState = state
+                        self.debugLines.append("Paused before \(workflow.objects[objectIndex].title).")
+                    }
+                    return
+                }
+                skipBreakpoint = false
+                await engine.step(&state)
+                await MainActor.run {
+                    self.appendWorkflowDebugLogs(state, workflow: workflow)
+                    self.debugCursor = state.processed
+                }
+            }
+            await MainActor.run {
+                self.appendWorkflowDebugLogs(state, workflow: workflow)
+                self.workflowDebugState = state
+                self.debugPaused = false
+                self.debugCursor = state.processed
+                self.debugLines.append("Finished.")
+            }
+        }
+    }
+
+    func stepWorkflowDebug(_ id: UUID) {
+        guard let workflow = workflows.first(where: { $0.id == id }),
+              let input = workflow.searchInputs.first ?? workflow.objects.first else { return }
+        if debugWorkflowID != id || workflowDebugState == nil {
+            debugWorkflowID = id
+            debugCursor = 0
+            debugLoggedCount = 0
+            debugAppliedEffects = 0
+            debugLines = ["Stepping \(workflow.name) with query ‘\(debugQuery)’"]
+            let invocation = WorkflowInvocation(
+                workflowID: workflow.id,
+                inputID: input.id,
+                keyword: input.keyword,
+                argument: debugQuery,
+                variables: workflow.variables
+            )
+            workflowDebugState = WorkflowRuntime.engine(for: workflow).initialState(invocation: invocation)
+        }
+        debuggerVisible = true
+        guard var state = workflowDebugState, !state.finished else {
+            debugLines.append("Finished.")
+            return
+        }
+        let engine = WorkflowRuntime.engine(for: workflow)
+        Task {
+            await engine.step(&state)
+            await MainActor.run {
+                self.appendWorkflowDebugLogs(state, workflow: workflow)
+                self.workflowDebugState = state
+                self.debugCursor = state.processed
+                if state.finished { self.debugLines.append("Finished.") }
+            }
+        }
+    }
+
+    private func appendWorkflowDebugLogs(_ state: WorkflowRunState, workflow: Workflow) {
+        guard state.logs.count > self.debugLoggedCount else { return }
+        for entry in state.logs[self.debugLoggedCount...] {
+            let output = entry.output.isEmpty ? "" : "  ↳ " + entry.output.replacingOccurrences(of: "\n", with: " ")
+            self.debugLines.append("\(entry.isError ? "⚠︎" : "•") \(entry.title): \(entry.detail)\(output)")
+        }
+        self.debugLoggedCount = state.logs.count
+        if state.effects.count > self.debugAppliedEffects {
+            self.applyWorkflowEffects(Array(state.effects[self.debugAppliedEffects...]))
+            self.debugAppliedEffects = state.effects.count
+        }
+        if let last = state.logs.last {
+            self.debugLine = "\(last.title): \(last.detail)"
+        }
+        _ = workflow
+    }
+
+    private func applyWorkflowEffects(_ effects: [WorkflowEffect]) {
+        for effect in effects {
+            switch effect {
+            case .openURL(let value):
+                if let url = URL(string: value) {
+                    NSWorkspace.shared.open(url)
+                    noteURLHistory(value)
+                }
+            case .openFile(let value):
+                let expanded = (value as NSString).expandingTildeInPath
+                if FileManager.default.fileExists(atPath: expanded) {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: expanded))
+                } else if !expanded.hasPrefix("/") {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/\(expanded).app"))
+                }
+            case .revealFile(let value):
+                let expanded = (value as NSString).expandingTildeInPath
+                if FileManager.default.fileExists(atPath: expanded) {
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: expanded)])
+                }
+            case .copy(let value):
+                writeClipboard(value)
+            case .largeType(let value):
+                showLarge(value)
+            case .notification(let title, let text):
+                let script = "display notification \"\(appleScriptEscape(text))\" with title \"\(appleScriptEscape(title))\""
+                Task.detached { _ = Shell.osascript(script) }
+            case .playSound(let path):
+                let expanded = (path as NSString).expandingTildeInPath
+                if let sound = NSSound(contentsOfFile: expanded, byReference: true) { sound.play() } else { NSSound.beep() }
+            case .speak(let text):
+                Task.detached { _ = Shell.run("/usr/bin/say", [text]) }
+            case .writeFile(let path, let text):
+                let expanded = (path as NSString).expandingTildeInPath
+                try? FileManager.default.createDirectory(at: URL(fileURLWithPath: expanded).deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? text.write(toFile: expanded, atomically: true, encoding: .utf8)
+                try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: expanded)
+            case .terminal(let command):
+                runInTerminal(command)
+            case .unsupported(let detail):
+                debugLine = detail
+            }
+        }
+    }
+
+    private func appleScriptEscape(_ text: String) -> String {
+        text.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: " ")
     }
 
     private func makeContext(files: [AppRecord], windows: [WindowInfo], processes: [ProcInfo], tabs: [LinkRecord], profiles: [ProfileInfo], definition: String?, forced: [SearchResult]? = nil) -> SearchContext {
@@ -1976,21 +2167,19 @@ final class AppModel {
     }
 
     private func finishJfredStore() {
-        if knowledge["launcher.sync"] != "1", let catalog = JfredStore.apply(self) {
+        if knowledge["launcher.sync"] != "1", let loaded = JfredStore.apply(self) {
             knowledge["launcher.sync"] = "1"
-            scriptCatalog = catalog
+            JfredStore.syncWorkflows(self, loaded)
             scheduleSave()
         } else {
-            let catalog = JfredStore.catalog()
-            scriptCatalog = catalog
-            JfredStore.syncWorkflows(self, catalog.workflows)
+            JfredStore.syncWorkflows(self, JfredStore.reloadWorkflows())
         }
     }
 
     func importLauncherSettings() {
-        guard let catalog = JfredStore.apply(self) else { return }
+        guard let loaded = JfredStore.apply(self) else { return }
         knowledge["launcher.sync"] = "1"
-        scriptCatalog = catalog
+        JfredStore.syncWorkflows(self, loaded)
         applyHotkeys()
         applyExpander()
         refreshStatusItem()
@@ -2245,4 +2434,72 @@ enum PreferenceIndex {
         }
         return rows
     }()
+}
+
+extension AppModel {
+    func workflowDestination(source: UUID, modifiers: Int) -> UUID? {
+        guard let workflowID = editingWorkflowID ?? selectedWorkflow,
+              let workflow = workflows.first(where: { $0.id == workflowID }) else { return nil }
+        return workflow.connections.first { $0.source == source && $0.modifiers == modifiers && ($0.sourceOutputUID ?? "").isEmpty }?.destination
+    }
+
+    func setWorkflowDestination(source: UUID, modifiers: Int, destination: UUID?) {
+        guard let workflowID = editingWorkflowID ?? selectedWorkflow,
+              let index = workflows.firstIndex(where: { $0.id == workflowID }) else { return }
+        workflows[index].connections.removeAll { $0.source == source && $0.modifiers == modifiers && ($0.sourceOutputUID ?? "").isEmpty }
+        if let destination, destination != source {
+            workflows[index].connections.append(WorkflowConnection(source: source, destination: destination, modifiers: modifiers))
+        }
+    }
+
+    func workflowBranchDestination(source: UUID, sourceOutputUID: String) -> UUID? {
+        guard let workflowID = editingWorkflowID ?? selectedWorkflow,
+              let workflow = workflows.first(where: { $0.id == workflowID }) else { return nil }
+        return workflow.connections.first { $0.source == source && $0.sourceOutputUID == sourceOutputUID }?.destination
+    }
+
+    func setWorkflowBranchDestination(source: UUID, sourceOutputUID: String, destination: UUID?) {
+        guard let workflowID = editingWorkflowID ?? selectedWorkflow,
+              let index = workflows.firstIndex(where: { $0.id == workflowID }) else { return }
+        workflows[index].connections.removeAll { $0.source == source && $0.sourceOutputUID == sourceOutputUID }
+        if let destination, destination != source {
+            workflows[index].connections.append(WorkflowConnection(source: source, destination: destination, sourceOutputUID: sourceOutputUID))
+        }
+    }
+
+    func workflowConditionLabel(_ workflowID: UUID, _ objectID: UUID, _ index: Int) -> String {
+        guard let object = workflows.first(where: { $0.id == workflowID })?.object(id: objectID),
+              let conditions = object.config["conditions"]?.arrayValue,
+              conditions.indices.contains(index),
+              let bits = conditions[index].objectValue else { return "Condition \\(index + 1)" }
+        let label = bits[string: "outputlabel"]
+        return label.isEmpty ? "Condition \\(index + 1)" : label
+    }
+}
+
+extension AppModel {
+    func setBreakpoint(_ index: Int, _ enabled: Bool) {
+        if enabled { debugBreakpoints.insert(index) } else { debugBreakpoints.remove(index) }
+    }
+}
+
+extension AppModel {
+    func setWorkflowHotkey(_ id: UUID, keyCode: UInt16, modifiers: UInt) {
+        guard let index = workflows.firstIndex(where: { $0.id == id }) else { return }
+        workflows[index].hotkey = Hotkey(keyCode: keyCode, modifiers: modifiers)
+        workflowsChanged()
+    }
+
+    func clearWorkflowHotkey(_ id: UUID) {
+        guard let index = workflows.firstIndex(where: { $0.id == id }) else { return }
+        workflows[index].hotkey = nil
+        workflowsChanged()
+    }
+
+    func setWorkflowDelay(_ objectID: UUID, _ seconds: Double) {
+        guard let workflowID = editingWorkflowID ?? selectedWorkflow,
+              let workflowIndex = workflows.firstIndex(where: { $0.id == workflowID }),
+              let objectIndex = workflows[workflowIndex].objects.firstIndex(where: { $0.id == objectID }) else { return }
+        workflows[workflowIndex].objects[objectIndex].config["seconds"] = .number(max(0, min(30, seconds)))
+    }
 }

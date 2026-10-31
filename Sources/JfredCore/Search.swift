@@ -56,9 +56,6 @@ public enum Search {
             )]
         }
 
-        if let exclusive = workflowResults(trimmed, context: context) {
-            return cap(exclusive, context: context)
-        }
         let webHits = mergedWebKeywords(for: trimmed, context: context)
         if !webHits.isEmpty {
             return cap(webHits, context: context)
@@ -380,38 +377,6 @@ public enum Search {
         argument(of: "define", in: raw.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    private static func workflowResults(_ trimmed: String, context: SearchContext) -> [SearchResult]? {
-        guard let match = WorkflowMatching.best(in: context.workflows, query: trimmed) else { return nil }
-        let workflow = match.workflow
-        let argument = match.argument
-        let score = 2.0
-        if workflow.actions.isEmpty {
-            return [make(
-                id: "wf:\(workflow.id.uuidString)",
-                title: workflow.name,
-                subtitle: workflow.keyword,
-                icon: "symbol:\(workflow.symbol)",
-                kind: "complete",
-                payload: workflow.keyword + " ",
-                category: "action",
-                score: score
-            )]
-        }
-        return workflow.actions.map { action in
-            let value = fillTemplate(action.value, query: argument)
-            return make(
-                id: "wf:\(workflow.id.uuidString):\(action.id.uuidString)",
-                title: workflow.name,
-                subtitle: actionSubtitle(action.kind, value: value, argument: argument),
-                icon: "symbol:\(workflow.symbol)",
-                kind: actionKind(action.kind),
-                payload: value,
-                category: "action",
-                score: score
-            )
-        }
-    }
-
     private static func fileResults(query: String, context: SearchContext) -> [SearchResult] {
         if query.isEmpty {
             return [make(id: "file:hint", title: "File search", subtitle: "Type a file name", icon: "symbol:doc", kind: "text", payload: "", category: "navigation", score: 1)]
@@ -602,34 +567,6 @@ public enum Search {
         return value
     }
 
-    private static func actionKind(_ kind: WorkflowAction.Kind) -> String {
-        switch kind {
-        case .openURL: return "url"
-        case .openApp: return "app"
-        case .shell: return "shell"
-        case .copy: return "copy"
-        case .largeType: return "largetype"
-        case .appleScript: return "applescript"
-        case .terminal: return "terminal"
-        }
-    }
-
-    private static func actionSubtitle(_ kind: WorkflowAction.Kind, value: String, argument: String) -> String {
-        if value.trimmingCharacters(in: .whitespaces).isEmpty && argument.isEmpty {
-            return "Type a query"
-        }
-        let label: String
-        switch kind {
-        case .openURL: label = "Open URL"
-        case .openApp: label = "Open app"
-        case .shell: label = "Run script"
-        case .copy: label = "Copy"
-        case .largeType: label = "Large Type"
-        case .appleScript: label = "AppleScript"
-        case .terminal: label = "Terminal"
-        }
-        return label + "  ·  " + value.replacingOccurrences(of: "\n", with: " ")
-    }
 }
 
 extension Search {

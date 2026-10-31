@@ -668,43 +668,6 @@ public struct WorkflowAction: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-public struct Workflow: Codable, Equatable, Sendable, Identifiable {
-    public var id: UUID
-    public var name: String
-    public var keyword: String
-    public var author: String
-    public var symbol: String
-    public var tint: String
-    public var enabled: Bool
-    public var builtin: String?
-    public var actions: [WorkflowAction]
-    public var hotkey: Hotkey?
-
-    public init(
-        id: UUID = UUID(),
-        name: String,
-        keyword: String,
-        author: String,
-        symbol: String,
-        tint: String,
-        enabled: Bool = true,
-        builtin: String? = nil,
-        actions: [WorkflowAction] = [],
-        hotkey: Hotkey? = nil
-    ) {
-        self.id = id
-        self.name = name
-        self.keyword = keyword
-        self.author = author
-        self.symbol = symbol
-        self.tint = tint
-        self.enabled = enabled
-        self.builtin = builtin
-        self.actions = actions
-        self.hotkey = hotkey
-    }
-}
-
 public struct Snippet: Codable, Equatable, Sendable, Identifiable {
     public var id: UUID
     public var name: String
