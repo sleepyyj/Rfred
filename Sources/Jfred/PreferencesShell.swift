@@ -171,7 +171,6 @@ struct GeneralPane: View {
             form
                 .padding(.top, 44)
             Spacer(minLength: 0)
-            NewsletterBanner(model: model)
         }
         .background(Color(hex: 0xECECEC))
     }
@@ -248,47 +247,6 @@ struct GeneralPane: View {
     }
 }
 
-private struct NewsletterBanner: View {
-    var model: AppModel
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 22) {
-            HoodMark()
-                .frame(width: 128, height: 120)
-                .padding(.leading, 38)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Jfred Newsletter")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
-                HStack(spacing: 8) {
-                    TextField("Your Email", text: model.bindPref(\.newsletterEmail))
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13))
-                        .padding(.horizontal, 8)
-                        .frame(width: 260, height: 24)
-                        .background(RoundedRectangle(cornerRadius: 3).fill(Color.white))
-                    Button(model.preferences.newsletterEmail.isEmpty ? "Subscribe" : "Saved") { model.saveNewsletterEmail() }
-                    .buttonStyle(.bordered)
-                }
-                Text("For Jfred updates, tips and sneak peeks, sign up for our occasional newsletter. The address stays on this Mac; Jfred does not send it anywhere.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.72))
-                    .frame(maxWidth: 380, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 18) {
-                    Label("Twitter", systemImage: "bird")
-                    Label("Website", systemImage: "globe")
-                }
-                .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.85))
-                .padding(.top, 2)
-            }
-            Spacer(minLength: 20)
-        }
-        .frame(height: 132)
-        .background(Color(hex: 0x3B0B5C))
-    }
-}
 
 
 /// Glass capsule for the preferences search field.

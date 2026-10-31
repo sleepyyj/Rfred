@@ -2213,11 +2213,6 @@ final class AppModel {
         }
     }
 
-    func saveNewsletterEmail() {
-        preferences.newsletterEmail = preferences.newsletterEmail.trimmingCharacters(in: .whitespacesAndNewlines)
-        scheduleSave()
-    }
-
     private func save() {
         let state = DiskState(preferences: preferences, workflows: workflows, snippets: snippets, clips: clips, usage: usage, knowledge: knowledge, selections: selections)
         let encoder = JSONEncoder()
