@@ -966,6 +966,9 @@ final class AppModel {
     }
 
     func showPreferences() {
+        if launcherVisible {
+            hideLauncher(reactivate: false)
+        }
         NSApp.setActivationPolicy(.regular)
         if let window = preferencesWindow() {
             window.deminiaturize(nil)
