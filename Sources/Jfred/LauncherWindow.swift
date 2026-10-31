@@ -16,6 +16,7 @@ final class LauncherController {
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var pinnedTop: CGFloat?
+    private var hasPlaced = false
     private var ignoreMove = false
     private var layoutToken = 0
     private var outsideDrag: (mouse: NSPoint, origin: NSPoint)?
@@ -69,7 +70,9 @@ final class LauncherController {
 
     func show() {
         guard let panel else { return }
-        if pinnedTop == nil { placeInitially() }
+        if !hasPlaced || !isOnVisibleScreen(panel.frame) {
+            hasPlaced = placeInitially()
+        }
         layout(animated: false)
         // A nonactivating panel can take keystrokes without pulling other
         // Jfred windows, such as Preferences, in front of Finder.
@@ -167,17 +170,26 @@ final class LauncherController {
         largePanel = panel
     }
 
-    private func placeInitially() {
-        guard let panel else { return }
+    @discardableResult
+    private func placeInitially() -> Bool {
+        guard let panel else { return false }
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens.first
-        guard let screen else { return }
+        guard let screen else { return false }
         let visible = screen.visibleFrame
         var frame = panel.frame
         frame.origin.x = visible.midX - frame.width / 2
         frame.origin.y = visible.maxY - 150 - frame.height
         panel.setFrame(frame, display: false)
         pinnedTop = panel.frame.maxY
+        return true
+    }
+
+    private func isOnVisibleScreen(_ frame: NSRect) -> Bool {
+        NSScreen.screens.contains { screen in
+            let visible = screen.visibleFrame
+            return visible.intersects(frame) && frame.minX >= visible.minX - 1
+        }
     }
 
     private func globalMouse(_ event: NSEvent) {
