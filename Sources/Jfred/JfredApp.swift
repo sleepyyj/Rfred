@@ -18,7 +18,7 @@ struct JfredApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .appTermination) {
-                Button("Quit Jfred") { delegate.model.quit() }
+                Button("Close Jfred Preferences") { delegate.model.leaveDock() }
                     .keyboardShortcut("q", modifiers: .command)
             }
             CommandGroup(after: .appSettings) {
@@ -77,10 +77,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if AppRuntime.explicitQuit { return .terminateNow }
-        if let event = NSApp.currentEvent, event.type == .keyDown, event.modifierFlags.contains(.command), event.charactersIgnoringModifiers?.lowercased() == "q" {
-            return .terminateNow
-        }
-        // Dock Quit and the last preferences window closing must not kill the hotkey.
+        // Cmd+Q closes Preferences while keeping the menu bar app and its
+        // global hotkeys alive. The status menu's "Quit Jfred" sets
+        // explicitQuit and still terminates the process.
         model.leaveDock()
         return .terminateCancel
     }

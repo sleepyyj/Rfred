@@ -1060,6 +1060,11 @@ final class AppModel {
         }
         NSApp.setActivationPolicy(.accessory)
         applyHotkeys()
+        // Changing the activation policy can drop Carbon hot keys while the
+        // policy transition is still in flight; register again once it settles.
+        DispatchQueue.main.async { [weak self] in
+            self?.applyHotkeys()
+        }
         leavingDock = false
     }
 
