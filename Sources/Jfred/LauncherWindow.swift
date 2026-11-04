@@ -249,8 +249,30 @@ final class LauncherController {
         }
     }
 
+    /// Return, Escape, Tab and the arrows confirm, cancel or move an IME
+    /// candidate. While the field editor has marked text, those keys belong to
+    /// the input method. Swallowing them searches or dismisses the launcher
+    /// before the candidate is committed.
+    private func defersToInputMethod(_ event: NSEvent) -> Bool {
+        switch event.keyCode {
+        case 36, 76, 53, 48, 123, 124, 125, 126:
+            break
+        default:
+            return false
+        }
+        return editingTextView()?.hasMarkedText() == true
+    }
+
+    private func editingTextView() -> NSTextView? {
+        guard let responder = panel?.firstResponder else { return nil }
+        if let editor = responder as? NSTextView { return editor }
+        if let field = responder as? NSTextField { return field.currentEditor() as? NSTextView }
+        return nil
+    }
+
     private func handle(_ event: NSEvent) -> NSEvent? {
         guard model.launcherVisible, panel?.isKeyWindow == true else { return event }
+        if defersToInputMethod(event) { return event }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if model.actionPanelVisible {
             switch event.keyCode {
