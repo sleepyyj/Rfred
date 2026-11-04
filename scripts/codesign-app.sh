@@ -1,0 +1,79 @@
+#!/bin/bash
+# Sign a Jfred.app bundle.
+#
+# macOS ties Desktop, Documents, and Downloads access to the designated
+# requirement. An ad-hoc signature ("codesign --sign -") makes that requirement
+# the current cdhash, so every rebuild is a new app and the grants are dropped.
+# Release builds instead sign with one long-lived self-signed certificate.
+# The requirement is then the bundle id plus that certificate's leaf hash,
+# which stays the same across machines and versions.
+set -euo pipefail
+
+app="${1:?usage: codesign-app.sh Jfred.app}"
+identity="Jfred Codesign"
+local_dir="${HOME}/.config/jfred/codesign"
+p12="${JFRED_CODESIGN_P12:-}"
+password="${JFRED_CODESIGN_PASSWORD:-}"
+
+if [ -z "$p12" ] && [ -f "${local_dir}/jfred-codesign.p12" ]; then
+  p12="${local_dir}/jfred-codesign.p12"
+  password="$(tr -d '\n' < "${local_dir}/password")"
+fi
+
+if [ -z "$p12" ]; then
+  if [ "${JFRED_CODESIGN_REQUIRED:-}" = "1" ]; then
+    echo "JFRED_CODESIGN_P12 is required for this build" >&2
+    exit 1
+  fi
+  codesign --force --sign - "$app"
+  codesign --verify --deep --strict "$app"
+  echo "Signed ad-hoc. The cdhash changes every build, so TCC folder grants will not survive an update."
+  exit 0
+fi
+
+if [ ! -f "$p12" ]; then
+  echo "Signing certificate not found: $p12" >&2
+  exit 1
+fi
+if [ -z "$password" ]; then
+  echo "Signing certificate password is empty" >&2
+  exit 1
+fi
+
+work="$(mktemp -d "${TMPDIR:-/tmp}/jfred-codesign.XXXXXX")"
+keychain="${work}/signing.keychain-db"
+default_keychain="$(security default-keychain | tr -d '[:space:]"')"
+search_list="$(security list-keychains -d user | sed -e 's/^[[:space:]]*//' -e 's/"//g')"
+
+cleanup() {
+  security delete-keychain "$keychain" >/dev/null 2>&1 || true
+  if [ -n "$search_list" ]; then
+    # Paths come from `security list-keychains` and do not contain spaces.
+    # shellcheck disable=SC2086
+    security list-keychains -d user -s $search_list >/dev/null 2>&1 || true
+  fi
+  if [ -n "$default_keychain" ]; then
+    security default-keychain -s "$default_keychain" >/dev/null 2>&1 || true
+  fi
+  mkdir -p /tmp/grok
+  dest="/tmp/grok/$(basename "$work").$(date +%Y%m%d%H%M%S)"
+  mv "$work" "$dest" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+security create-keychain -p "$password" "$keychain"
+security set-keychain-settings -lut 21600 "$keychain"
+security unlock-keychain -p "$password" "$keychain"
+security import "$p12" -k "$keychain" -P "$password" -T /usr/bin/codesign >/dev/null
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" >/dev/null
+codesign --force --sign "$identity" --keychain "$keychain" "$app"
+codesign --verify --deep --strict "$app"
+req="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^.*designated => //p')"
+case "$req" in
+  'identifier "dev.jim.jfred.local" and certificate leaf = H"'*'"') ;;
+  *)
+    echo "Unexpected designated requirement: $req" >&2
+    exit 1
+    ;;
+esac
+echo "Signed: $req"

@@ -36,7 +36,7 @@ Requires macOS 14 or later. This build is Apple Silicon (arm64) only.
 
 1. Drag Jfred into Applications.
 2. First launch: right-click Jfred.app and choose Open
-   (the app is ad-hoc signed, not notarized).
+   (the app is self-signed with a stable certificate, not notarized).
    Or run: xattr -cr /Applications/Jfred.app
 
 Jfred stays out of the Dock until Preferences is open.

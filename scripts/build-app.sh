@@ -30,6 +30,6 @@ if [ -f Resources/AppIcon.png ]; then
   mv "$(dirname "$ICONSET")" "/tmp/grok/AppIcon.iconset.$(date +%Y%m%d%H%M%S)"
 fi
 if command -v codesign >/dev/null; then
-  codesign --force --deep --sign - "$APP"
+  ./scripts/codesign-app.sh "$APP"
 fi
 echo "$APP"

@@ -98,6 +98,22 @@ jobs:
           echo "prev=${last:-}" >> "$GITHUB_OUTPUT"
           echo "Releasing $tag (bump=$bump, previous=${last:-none})"
 
+      - name: Load signing certificate
+        env:
+          JFRED_CODESIGN_P12_BASE64: ${{ secrets.JFRED_CODESIGN_P12 }}
+          JFRED_CODESIGN_PASSWORD: ${{ secrets.JFRED_CODESIGN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$JFRED_CODESIGN_P12_BASE64" ] || [ -z "$JFRED_CODESIGN_PASSWORD" ]; then
+            echo "JFRED_CODESIGN_P12 and JFRED_CODESIGN_PASSWORD must be set" >&2
+            exit 1
+          fi
+          p12="$RUNNER_TEMP/jfred-codesign.p12"
+          printf '%s' "$JFRED_CODESIGN_P12_BASE64" | base64 --decode > "$p12"
+          echo "JFRED_CODESIGN_P12=$p12" >> "$GITHUB_ENV"
+          echo "JFRED_CODESIGN_PASSWORD=$JFRED_CODESIGN_PASSWORD" >> "$GITHUB_ENV"
+          echo "JFRED_CODESIGN_REQUIRED=1" >> "$GITHUB_ENV"
+
       - name: Build DMG
         run: ./scripts/package-dmg.sh --ci
 
