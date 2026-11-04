@@ -64,8 +64,17 @@ trap cleanup EXIT
 security create-keychain -p "$password" "$keychain"
 security set-keychain-settings -lut 21600 "$keychain"
 security unlock-keychain -p "$password" "$keychain"
+# codesign only sees identities in the user search list. Put the temporary
+# keychain there for this process, and restore the previous list on exit.
+# shellcheck disable=SC2086
+security list-keychains -d user -s "$keychain" $search_list >/dev/null
+security default-keychain -s "$keychain" >/dev/null
 security import "$p12" -k "$keychain" -P "$password" -T /usr/bin/codesign >/dev/null
 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" >/dev/null
+if ! security find-certificate -c "$identity" "$keychain" >/dev/null; then
+  echo "Imported certificate is missing the $identity identity." >&2
+  exit 1
+fi
 codesign --force --sign "$identity" --keychain "$keychain" "$app"
 codesign --verify --deep --strict "$app"
 req="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^.*designated => //p')"
