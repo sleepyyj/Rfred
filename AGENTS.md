@@ -10,6 +10,17 @@ Every commit must describe the full set of changes it contains. Do not use a sin
 - Do not omit small changes. Describe user-visible behavior, data migrations, and compatibility changes.
 - Prefer splitting unrelated changes into separate commits.
 
+The subject starts with a semver type, then the imperative sentence. A push to `main` tags the next release from that type. The tag is `vMAJOR.MINOR.PATCH`. The release workflow stamps `Info.plist` for the DMG and tags the pushed commit. It does not add a "Set version" commit.
+
+- `feat: ...` increments minor and resets patch. `feat: Show clipboard image previews`
+- `fix: ...` increments patch. `fix: Skip a duplicate paste`
+- `chore:`, `docs:`, `refactor:`, `test:`, and `ci:` also increment patch, and still publish a release.
+- A subject with `!` after the type, or a body line `BREAKING CHANGE:`, increments major and resets minor and patch.
+- Several commits in one push use the highest change: major, then minor, then patch.
+- A subject without a type is a patch. Put `[skip ci]` in the subject to push without a release.
+
+`Info.plist` in git keeps the last version someone committed. The DMG and the GitHub tag carry the released version.
+
 ## Code signing
 
 Release builds sign `Jfred.app` with one self-signed certificate, common name `Jfred Codesign`. The designated requirement is:

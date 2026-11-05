@@ -8,8 +8,8 @@ on:
       bump:
         description: Semver component to increment
         type: choice
-        options: [minor, patch, major]
-        default: minor
+        options: [auto, patch, minor, major]
+        default: auto
 
 concurrency:
   group: release-dmg
@@ -20,8 +20,8 @@ permissions:
 
 jobs:
   dmg:
-    # The version commit is pushed with the workflow token. Skip it if that
-    # push still starts a run, or the next release would bump forever.
+    # A release tags the pushed commit. It does not push another commit.
+    # [skip ci] still skips a release when someone needs a push with no tag.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       !contains(github.event.head_commit.message, '[skip ci]')
@@ -57,48 +57,30 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --tags --force
-          last="$(git tag -l 'v[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
-          # A push to main starts the next minor line. Patch stays on the
-          # current line. Major is chosen from the workflow dispatch form.
-          bump="${{ github.event.inputs.bump || 'minor' }}"
-          plist="Info.plist"
-          if [ -z "$last" ]; then
-            ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")"
-          else
-            ver="${last#v}"
-            maj="${ver%%.*}"
-            rest="${ver#*.}"
-            min="${rest%%.*}"
-            pat="${rest#*.}"
-            case "$bump" in
-              major)
-                maj=$((maj + 1))
-                min=0
-                pat=0
-                ;;
-              minor)
-                min=$((min + 1))
-                pat=0
-                ;;
-              *)
-                pat=$((pat + 1))
-                ;;
-            esac
-            ver="${maj}.${min}.${pat}"
+          bump="${{ github.event.inputs.bump || 'auto' }}"
+          if ! parsed="$(./scripts/next-version.sh "$bump")"; then
+            status=$?
+            if [ "$status" -eq 2 ]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "No new commits to release"
+              exit 0
+            fi
+            exit "$status"
           fi
-          tag="v${ver}"
-          if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "Tag $tag already exists" >&2
-            exit 1
-          fi
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $ver" "$plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $ver" "$plist"
-          echo "ver=$ver" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "prev=${last:-}" >> "$GITHUB_OUTPUT"
-          echo "Releasing $tag (bump=$bump, previous=${last:-none})"
+          echo "$parsed"
+          eval "$parsed"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $ver" Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $ver" Info.plist
+          {
+            echo "ver=$ver"
+            echo "tag=$tag"
+            echo "prev=${prev:-}"
+            echo "skip=false"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag (bump=$bump, previous=${prev:-none})"
 
       - name: Load signing certificate
+        if: steps.version.outputs.skip != 'true'
         env:
           JFRED_CODESIGN_P12_BASE64: ${{ secrets.JFRED_CODESIGN_P12 }}
           JFRED_CODESIGN_PASSWORD: ${{ secrets.JFRED_CODESIGN_PASSWORD }}
@@ -115,9 +97,11 @@ jobs:
           echo "JFRED_CODESIGN_REQUIRED=1" >> "$GITHUB_ENV"
 
       - name: Build DMG
+        if: steps.version.outputs.skip != 'true'
         run: ./scripts/package-dmg.sh --ci
 
       - name: Tag and publish GitHub Release
+        if: steps.version.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -152,13 +136,7 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          ver="${{ steps.version.outputs.ver }}"
-          git add Info.plist
-          if ! git diff --cached --quiet; then
-            git commit -m "Set version to ${ver}. [skip ci]"
-          fi
           git tag -a "$tag" -m "$tag"
-          git push origin HEAD
           git push origin "$tag"
           gh release create "$tag" "$dmg" \
             --title "$tag" \
