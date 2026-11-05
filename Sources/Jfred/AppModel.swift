@@ -85,6 +85,7 @@ final class AppModel {
     var showThemeEditor = false
     var helpQuery = ""
     var selectionHotkeyWarning = ""
+    var clipboardHotkeyWarning = ""
     var actionPanelVisible = false
     var actionIndex = 0
     var launcherActions: [LauncherAction] = []
@@ -767,7 +768,7 @@ final class AppModel {
 
     func preferencesChanged(from old: Preferences) {
         scheduleSave()
-        if old.hotkey != preferences.hotkey { applyHotkeys() }
+        if old.hotkey != preferences.hotkey || old.clipboardEnabled != preferences.clipboardEnabled { applyHotkeys() }
         if old.launchAtLogin != preferences.launchAtLogin { applyLoginItem() }
         if old.snippetsEnabled != preferences.snippetsEnabled { applyExpander() }
         if old.remoteEnabled != preferences.remoteEnabled || old.remotePort != preferences.remotePort || old.remoteLocalOnly != preferences.remoteLocalOnly || old.remoteToken != preferences.remoteToken {
@@ -1928,6 +1929,16 @@ final class AppModel {
             Task { @MainActor in self?.showSelectionActions() }
         }
         selectionHotkeyWarning = selectionHotkeyOK ? "" : "⌥⌘\\ is already used by another app."
+        if preferences.clipboardEnabled {
+            let clipboardHotkey = Hotkey(keyCode: 8, modifiers: Hotkey.option | Hotkey.command)
+            let clipboardHotkeyOK = HotkeyCenter.shared.register(id: 3, keyCode: UInt32(clipboardHotkey.keyCode), modifiers: clipboardHotkey.carbonModifiers) { [weak self] in
+                Task { @MainActor in self?.showClipboardViewer() }
+            }
+            clipboardHotkeyWarning = clipboardHotkeyOK ? "" : "⌥⌘C is already used by another app."
+        } else {
+            HotkeyCenter.shared.unregister(id: 3)
+            clipboardHotkeyWarning = ""
+        }
         for id in workflowHotkeyIDs { HotkeyCenter.shared.unregister(id: id) }
         workflowHotkeyIDs.removeAll()
         if ok {
@@ -1978,6 +1989,20 @@ final class AppModel {
             playSound: preferences.snippetExpandPlaySound,
             restoreClipboard: preferences.snippetExpandRestoreClipboard
         )
+    }
+
+    func showClipboardViewer() {
+        guard preferences.clipboardEnabled else { return }
+        let keyword = preferences.clipboardViewerKeyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = (keyword.isEmpty ? "clipboard" : keyword) + " "
+        if launcherVisible, query == text {
+            hideLauncher(reactivate: true)
+            return
+        }
+        showLauncher()
+        fromHistory = false
+        query = text
+        scheduleSearch()
     }
 
     func showSelectionActions() {

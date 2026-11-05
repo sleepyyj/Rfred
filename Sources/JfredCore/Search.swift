@@ -60,6 +60,9 @@ public enum Search {
         if !webHits.isEmpty {
             return cap(webHits, context: context)
         }
+        if let viewer = clipboardViewerResults(for: trimmed, context: context) {
+            return viewer
+        }
 
         var found: [SearchResult] = []
         if context.preferences.calculatorEnabled, Calculator.allows(trimmed, advanced: context.preferences.calculatorAdvanced), let value = Calculator.evaluate(trimmed) {
@@ -247,69 +250,6 @@ public enum Search {
                 category: "clipboard",
                 score: 2
             ))
-        }
-        if context.preferences.clipboardEnabled, let clipQuery = argument(of: context.preferences.clipboardViewerKeyword, in: trimmed) ?? argument(of: "clip", in: trimmed) {
-            if context.preferences.clipboardSnippetsAtTop, clipQuery.isEmpty {
-                found.append(make(
-                    id: "snippets:all",
-                    title: "All Snippets",
-                    subtitle: "Browse snippets in the launcher",
-                    icon: "symbol:text.quote",
-                    kind: "snippets",
-                    payload: "",
-                    category: "expansion",
-                    score: 2
-                ))
-            }
-            if context.preferences.clipboardSnippetsWhenSearching {
-                for snippet in context.snippets {
-                    let hay = snippet.name + " " + snippet.keyword + " " + snippet.text
-                    guard clipQuery.isEmpty || fold(hay).contains(fold(clipQuery)) else { continue }
-                    found.append(make(
-                        id: "snippet:\(snippet.id.uuidString):clip",
-                        title: snippet.name,
-                        subtitle: snippet.keyword + "  ·  " + snippet.text.replacingOccurrences(of: "\n", with: " "),
-                        icon: "symbol:text.quote",
-                        kind: "snippet",
-                        payload: snippet.id.uuidString,
-                        category: "expansion",
-                        score: context.preferences.clipboardSnippetsAtTop ? 1.8 : 1.38
-                    ))
-                }
-            }
-            let filtered = context.clips.filter { clipQuery.isEmpty || fold($0.text).contains(fold(clipQuery)) }
-            for clip in filtered.prefix(8) {
-                let preview = clip.text.replacingOccurrences(of: "\n", with: " ")
-                let kind = clip.kind ?? "text"
-                let title: String
-                let subtitle: String
-                let icon: String
-                switch kind {
-                case "image":
-                    title = "Image"
-                    subtitle = "Clipboard image"
-                    icon = clip.imageFile.map { "file:\($0)" } ?? "symbol:photo"
-                case "file":
-                    let paths = clip.filePaths ?? []
-                    title = paths.prefix(2).map { ($0 as NSString).lastPathComponent }.joined(separator: ", ")
-                    subtitle = paths.joined(separator: "  ·  ")
-                    icon = paths.first.map { "file:\($0)" } ?? "symbol:doc"
-                default:
-                    title = String(preview.prefix(80))
-                    subtitle = "Clipboard"
-                    icon = "symbol:doc.on.clipboard"
-                }
-                found.append(make(
-                    id: "clip:\(clip.id.uuidString)",
-                    title: title,
-                    subtitle: subtitle,
-                    icon: icon,
-                    kind: "clipboard",
-                    payload: clip.id.uuidString,
-                    category: "clipboard",
-                    score: 1.4
-                ))
-            }
         }
         if context.preferences.onePasswordEnabled {
             for item in context.opItems {
@@ -543,6 +483,96 @@ public enum Search {
         let keptOthers = Array(others.prefix(room))
         let merged = dedupe(keptOthers + settings, query: query, context: context)
         return Array(merged.prefix(resultLimit))
+    }
+
+    /// Clipboard viewer is its own result list. Newest clips stay first.
+    private static func clipboardViewerResults(for trimmed: String, context: SearchContext) -> [SearchResult]? {
+        guard context.preferences.clipboardEnabled else { return nil }
+        guard let clipQuery = argument(of: context.preferences.clipboardViewerKeyword, in: trimmed) ?? argument(of: "clip", in: trimmed) else { return nil }
+        var rows: [SearchResult] = []
+        if context.preferences.clipboardSnippetsAtTop, clipQuery.isEmpty {
+            rows.append(make(
+                id: "snippets:all",
+                title: "All Snippets",
+                subtitle: "Browse snippets in the launcher",
+                icon: "symbol:text.quote",
+                kind: "snippets",
+                payload: "",
+                category: "expansion",
+                score: 2
+            ))
+        }
+        var snippets: [SearchResult] = []
+        if context.preferences.clipboardSnippetsWhenSearching {
+            for snippet in context.snippets {
+                let hay = snippet.name + " " + snippet.keyword + " " + snippet.text
+                guard clipQuery.isEmpty || fold(hay).contains(fold(clipQuery)) else { continue }
+                snippets.append(make(
+                    id: "snippet:\(snippet.id.uuidString):clip",
+                    title: snippet.name,
+                    subtitle: snippet.keyword + "  ·  " + snippet.text.replacingOccurrences(of: "\n", with: " "),
+                    icon: "symbol:text.quote",
+                    kind: "snippet",
+                    payload: snippet.id.uuidString,
+                    category: "expansion",
+                    score: context.preferences.clipboardSnippetsAtTop ? 1.8 : 1.38
+                ))
+            }
+        }
+        let filtered = context.clips.filter { clipQuery.isEmpty || fold($0.text).contains(fold(clipQuery)) }
+        var clips: [SearchResult] = []
+        for clip in filtered {
+            let preview = clip.text.replacingOccurrences(of: "\n", with: " ")
+            let kind = clip.kind ?? "text"
+            let title: String
+            let subtitle: String
+            let icon: String
+            switch kind {
+            case "image":
+                title = "Image"
+                subtitle = "Clipboard image"
+                icon = clip.imageFile.map { "file:\($0)" } ?? "symbol:photo"
+            case "file":
+                let paths = clip.filePaths ?? []
+                title = paths.prefix(2).map { ($0 as NSString).lastPathComponent }.joined(separator: ", ")
+                subtitle = paths.joined(separator: "  ·  ")
+                icon = paths.first.map { "file:\($0)" } ?? "symbol:doc"
+            default:
+                title = String(preview.prefix(80))
+                subtitle = "Clipboard"
+                icon = "symbol:doc.on.clipboard"
+            }
+            clips.append(make(
+                id: "clip:\(clip.id.uuidString)",
+                title: title,
+                subtitle: subtitle,
+                icon: icon,
+                kind: "clipboard",
+                payload: clip.id.uuidString,
+                category: "clipboard",
+                score: 1.4
+            ))
+        }
+        if context.preferences.clipboardSnippetsAtTop {
+            rows.append(contentsOf: snippets)
+            rows.append(contentsOf: clips)
+        } else {
+            rows.append(contentsOf: clips)
+            rows.append(contentsOf: snippets)
+        }
+        if rows.isEmpty {
+            rows.append(make(
+                id: "clipboard:empty",
+                title: "No clipboard history",
+                subtitle: "Copies show up here after you copy something",
+                icon: "symbol:doc.on.clipboard",
+                kind: "text",
+                payload: "",
+                category: "clipboard",
+                score: 1
+            ))
+        }
+        return Array(rows.prefix(resultLimit))
     }
 
     private static func clearKeywordQuery(_ query: String, keyword: String) -> Int?? {

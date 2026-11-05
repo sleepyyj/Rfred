@@ -219,6 +219,19 @@ struct CoreTests {
         #expect(FileBrowser.entries(for: "not/a/path") == nil)
     }
 
+    @Test func clipboardViewerIsHistory() {
+        var context = SearchContext()
+        context.preferences.clipboardEnabled = true
+        context.preferences.clipboardSnippetsAtTop = false
+        context.apps = [AppRecord(id: "app", name: "Clipboard", path: "/Applications/Clipboard.app")]
+        let newer = ClipItem(text: "newer clip", date: Date(timeIntervalSince1970: 2))
+        let older = ClipItem(text: "older clip", date: Date(timeIntervalSince1970: 1))
+        context.clips = [newer, older]
+        let rows = Search.results(for: "clipboard", context: context)
+        #expect(rows.map(\.title) == ["newer clip", "older clip"])
+        #expect(!rows.contains { $0.kind == "app" })
+    }
+
     @Test func clipboardViewerIncludesSnippets() {
         var context = SearchContext()
         context.preferences.clipboardEnabled = true

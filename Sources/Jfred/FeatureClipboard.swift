@@ -37,9 +37,9 @@ extension FeaturesPane {
                         .padding(.horizontal, 8)
                         .background(RoundedRectangle(cornerRadius: 5).fill(Color.white))
                         .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.black.opacity(0.12)))
-                    Text("Hotkey is not configurable yet")
+                    Text(model.clipboardHotkeyWarning.isEmpty ? "Opens the clipboard viewer" : model.clipboardHotkeyWarning)
                         .font(.system(size: 11))
-                        .foregroundStyle(JfredColor.sub)
+                        .foregroundStyle(model.clipboardHotkeyWarning.isEmpty ? JfredColor.sub : Color.red)
                 }
             }
             SettingsLabeled(title: "Viewer Keyword:") {
