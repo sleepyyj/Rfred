@@ -4,7 +4,7 @@
 
 Every commit must describe the full set of changes it contains. Do not use a single subject line for a multi-change commit and hide the other work in the diff.
 
-- Subject: one short imperative sentence naming the main goal of the commit.
+- Subject: `type: ` plus one short imperative sentence naming the main goal of the commit. The type is what the release workflow reads.
 - Body: a bullet list covering every feature, fix, UI change, documentation update, and test in the commit.
 - When a commit contains multiple features, keep the subject as a summary and list every feature in the body.
 - Do not omit small changes. Describe user-visible behavior, data migrations, and compatibility changes.
@@ -43,7 +43,7 @@ Do not generate a replacement certificate. A new certificate is a new leaf hash,
 Example:
 
 ```text
-Rebuild workflows around Alfred object graphs
+feat: Rebuild workflows around Alfred object graphs
 
 - Replace the flat action model with Alfred objects, connections and uidata
 - Add Script Filter JSON/XML handling and graph execution
