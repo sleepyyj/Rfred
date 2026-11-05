@@ -69,7 +69,7 @@ extension FeaturesPane {
                         .toggleStyle(.checkbox)
                 }
             }
-            SettingsNote("Integrate your snippets in the clipboard history viewer.")
+            SettingsNote("All Snippets is a row at the top of the viewer. Individual snippets appear only after you type a search.")
             SettingsLabeled(title: "Universal:") {
                 VStack(alignment: .leading, spacing: 6) {
                     Toggle("Ignore Text and Images from other Apple devices", isOn: model.bindPref(\.clipboardIgnoreUniversalText))
@@ -129,8 +129,8 @@ extension FeaturesPane {
                 }
             }
             SettingsNote("The clipboard history is stored locally with 0600 permissions inside Jfred's support folder. Items copied from 1Password, Keychain Access, Passwords, Wallet and SecurityAgent are never stored. Enable clearing on quit if you don't want it to persist.")
-            stringListEditor(title: "Ignore Apps:", hint: "Application name", keyPath: \.clipboardIgnoreApps)
-            SettingsNote("Drop the applications you would like Jfred to ignore into the list, or add their exact names. Only focusable applications can be ignored.")
+            stringListEditor(title: "Ignore Apps:", hint: "com.example.app", keyPath: \.clipboardIgnoreApps)
+            SettingsNote("Match the bundle identifier, such as com.apple.keychainaccess, or the application name. Only the frontmost application can be ignored.")
         }
     }
 

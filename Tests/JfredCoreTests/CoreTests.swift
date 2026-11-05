@@ -240,8 +240,19 @@ struct CoreTests {
         context.snippets = [Snippet(name: "Address", keyword: ";addr", text: "1 Infinite Loop", autoExpand: true)]
         let all = Search.results(for: "clipboard", context: context)
         #expect(all.contains { $0.id == "snippets:all" })
+        #expect(!all.contains { $0.kind == "snippet" })
         let filtered = Search.results(for: "clipboard infinite", context: context)
         #expect(filtered.contains { $0.kind == "snippet" && $0.title == "Address" })
+    }
+
+    @Test func clipboardTitlesKeepNewlinesAndDropObjectReplacement() {
+        var context = SearchContext()
+        context.preferences.clipboardEnabled = true
+        context.preferences.clipboardSnippetsAtTop = false
+        context.clips = [ClipItem(text: "one\ntwo\u{FFFC}\tend", date: Date())]
+        let row = Search.results(for: "clipboard", context: context).first
+        #expect(row?.title == "one⏎two⇥end")
+        #expect(row?.subtitle == "Clipboard")
     }
 
     @Test func customTerminalPrefix() {

@@ -503,7 +503,7 @@ public enum Search {
             ))
         }
         var snippets: [SearchResult] = []
-        if context.preferences.clipboardSnippetsWhenSearching {
+        if context.preferences.clipboardSnippetsWhenSearching, !clipQuery.isEmpty {
             for snippet in context.snippets {
                 let hay = snippet.name + " " + snippet.keyword + " " + snippet.text
                 guard clipQuery.isEmpty || fold(hay).contains(fold(clipQuery)) else { continue }
@@ -522,15 +522,16 @@ public enum Search {
         let filtered = context.clips.filter { clipQuery.isEmpty || fold($0.text).contains(fold(clipQuery)) }
         var clips: [SearchResult] = []
         for clip in filtered {
-            let preview = clip.text.replacingOccurrences(of: "\n", with: " ")
             let kind = clip.kind ?? "text"
             let title: String
             let subtitle: String
             let icon: String
             switch kind {
             case "image":
-                title = "Image"
-                subtitle = "Clipboard image"
+                let row = ClipboardText.row(text: clip.text, fallback: "Clipboard image")
+                let placeholder = clip.text.isEmpty || clip.text == "Image"
+                title = placeholder ? "Image" : row.title
+                subtitle = placeholder || row.subtitle == "Clipboard image" ? "Clipboard image" : row.subtitle
                 icon = clip.imageFile.map { "file:\($0)" } ?? "symbol:photo"
             case "file":
                 let paths = clip.filePaths ?? []
@@ -538,8 +539,9 @@ public enum Search {
                 subtitle = paths.joined(separator: "  ·  ")
                 icon = paths.first.map { "file:\($0)" } ?? "symbol:doc"
             default:
-                title = String(preview.prefix(80))
-                subtitle = "Clipboard"
+                let row = ClipboardText.row(text: clip.text, fallback: "Clipboard")
+                title = row.title
+                subtitle = row.subtitle
                 icon = "symbol:doc.on.clipboard"
             }
             clips.append(make(

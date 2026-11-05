@@ -387,7 +387,14 @@ public struct Preferences: Codable, Equatable, Sendable {
         clipboardMoveToTopOnUse = true
         clipboardSnippetsAtTop = true
         clipboardSnippetsWhenSearching = true
-        clipboardIgnoreApps = ["1Password", "Keychain Access", "Passwords", "Wallet", "SecurityAgent"]
+        clipboardIgnoreApps = [
+            "com.1password.1password",
+            "com.agilebits.onepassword7",
+            "com.apple.keychainaccess",
+            "com.apple.Passwords",
+            "com.apple.Passbook",
+            "com.apple.SecurityAgent",
+        ]
         fileOpenFoldersInFinder = false
         fileClearBufferAfterAction = false
         fileBufferTimeoutMinutes = 5
@@ -718,14 +725,23 @@ public struct ClipItem: Codable, Equatable, Sendable, Identifiable {
     public var kind: String?
     public var imageFile: String?
     public var filePaths: [String]?
+    /// Original HTML flavor, restored when the clip is pasted.
+    public var html: Data?
+    /// Original RTF flavor, restored when the clip is pasted.
+    public var rtf: Data?
+    /// "png" or "tiff". Absent clips were saved as PNG.
+    public var imageType: String?
 
-    public init(id: UUID = UUID(), text: String, date: Date, kind: String? = nil, imageFile: String? = nil, filePaths: [String]? = nil) {
+    public init(id: UUID = UUID(), text: String, date: Date, kind: String? = nil, imageFile: String? = nil, filePaths: [String]? = nil, html: Data? = nil, rtf: Data? = nil, imageType: String? = nil) {
         self.id = id
         self.text = text
         self.date = date
         self.kind = kind
         self.imageFile = imageFile
         self.filePaths = filePaths
+        self.html = html
+        self.rtf = rtf
+        self.imageType = imageType
     }
 }
 
