@@ -230,6 +230,11 @@ struct CoreTests {
         let rows = Search.results(for: "clipboard", context: context)
         #expect(rows.map(\.title) == ["newer clip", "older clip"])
         #expect(!rows.contains { $0.kind == "app" })
+        context.clips = [ClipItem(text: "Image", date: Date(), kind: "image", imageFile: "/tmp/clip.png", sourcePath: "/Applications/Safari.app", sourceName: "Safari")]
+        let image = Search.results(for: "clipboard", context: context).first
+        #expect(image?.icon == "clipimage:/tmp/clip.png")
+        #expect(image?.badge == "file:/Applications/Safari.app")
+        #expect(image?.badgeName == "Safari")
     }
 
     @Test func clipboardViewerIncludesSnippets() {

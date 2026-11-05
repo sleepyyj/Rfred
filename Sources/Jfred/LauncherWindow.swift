@@ -627,10 +627,24 @@ struct LauncherRow: View {
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text(shortcut)
-                .font(.system(size: theme.shortcutSize, weight: .regular))
-                .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
-                .fixedSize(horizontal: true, vertical: false)
+            if item.badge.isEmpty {
+                Text(shortcut)
+                    .font(.system(size: theme.shortcutSize, weight: .regular))
+                    .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
+                    .fixedSize(horizontal: true, vertical: false)
+            } else {
+                VStack(alignment: .trailing, spacing: 2) {
+                    ResultIcon(icon: item.badge, size: 16)
+                        .frame(width: 16, height: 16)
+                        .help(item.badgeName)
+                    Spacer(minLength: 0)
+                    Text(shortcut)
+                        .font(.system(size: theme.shortcutSize, weight: .regular))
+                        .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .frame(height: theme.rowHeight - theme.rowPaddingV * 2)
+            }
         }
         .padding(.horizontal, theme.paddingH)
         .frame(maxWidth: .infinity, minHeight: theme.rowHeight, maxHeight: theme.rowHeight, alignment: .leading)

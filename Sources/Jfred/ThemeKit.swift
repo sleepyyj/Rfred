@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import JfredCore
 import SwiftUI
 
@@ -566,8 +567,10 @@ struct ResultIcon: View {
     var size: CGFloat = 40
     var body: some View {
         Group {
-            if icon.hasPrefix("file:") {
-                AppIcon(path: String(icon.dropFirst("file:".count)))
+            if icon.hasPrefix("clipimage:") {
+                AppIcon(path: String(icon.dropFirst("clipimage:".count)), preview: true, side: size)
+            } else if icon.hasPrefix("file:") {
+                AppIcon(path: String(icon.dropFirst("file:".count)), side: size)
             } else if icon.hasPrefix("symbol:") {
                 Image(systemName: String(icon.dropFirst("symbol:".count)))
                     .font(.system(size: size * 0.62))
@@ -588,10 +591,11 @@ final class IconCache {
     private var images: [String: NSImage] = [:]
     private let side: CGFloat = 40
 
-    func image(for path: String) -> NSImage {
-        if let cached = images[path] { return cached }
-        let rendered = render(path)
-        images[path] = rendered
+    func image(for path: String, preview: Bool = false) -> NSImage {
+        let key = preview ? "preview:\(path)" : path
+        if let cached = images[key] { return cached }
+        let rendered = render(path, preview: preview)
+        images[key] = rendered
         return rendered
     }
 
@@ -603,7 +607,7 @@ final class IconCache {
         func step() {
             let end = min(index + 20, missing.count)
             while index < end {
-                images[missing[index]] = render(missing[index])
+                images[missing[index]] = render(missing[index], preview: false)
                 index += 1
             }
             if index < missing.count {
@@ -613,7 +617,16 @@ final class IconCache {
         DispatchQueue.main.async(execute: step)
     }
 
-    private func render(_ path: String) -> NSImage {
+    func prefetchPreviews(_ paths: [String]) {
+        let missing = paths.filter { images["preview:\($0)"] == nil }
+        guard !missing.isEmpty else { return }
+        for path in missing {
+            images["preview:\(path)"] = render(path, preview: true)
+        }
+    }
+
+    private func render(_ path: String, preview: Bool) -> NSImage {
+        if preview, let thumbnail = imageThumbnail(path) { return thumbnail }
         let source = path.isEmpty ? NSWorkspace.shared.icon(for: .folder) : NSWorkspace.shared.icon(forFile: path)
         var rect = NSRect(x: 0, y: 0, width: side * 2, height: side * 2)
         guard let cg = source.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
@@ -622,10 +635,28 @@ final class IconCache {
         }
         return NSImage(cgImage: cg, size: NSSize(width: side, height: side))
     }
+
+    private func imageThumbnail(_ path: String) -> NSImage? {
+        let url = URL(fileURLWithPath: path) as CFURL
+        guard let source = CGImageSourceCreateWithURL(url, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: side * 2,
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        let width = CGFloat(cg.width)
+        let height = CGFloat(cg.height)
+        guard width > 0, height > 0 else { return nil }
+        let scale = min(side / width, side / height)
+        return NSImage(cgImage: cg, size: NSSize(width: width * scale, height: height * scale))
+    }
 }
 
 struct AppIcon: NSViewRepresentable {
     var path: String
+    var preview: Bool = false
+    var side: CGFloat = 40
     func makeNSView(context: Context) -> NSImageView {
         let view = NSImageView()
         view.imageScaling = .scaleProportionallyUpOrDown
@@ -637,14 +668,14 @@ struct AppIcon: NSViewRepresentable {
         view.setContentHuggingPriority(.defaultLow, for: .vertical)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        view.image = IconCache.shared.image(for: path)
+        view.image = IconCache.shared.image(for: path, preview: preview)
         return view
     }
     func updateNSView(_ nsView: NSImageView, context: Context) {
-        nsView.image = IconCache.shared.image(for: path)
+        nsView.image = IconCache.shared.image(for: path, preview: preview)
     }
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSImageView, context: Context) -> CGSize? {
-        CGSize(width: 40, height: 40)
+        CGSize(width: side, height: side)
     }
 }
 

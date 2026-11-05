@@ -415,8 +415,8 @@ public enum Search {
         return make(id: id, title: title, subtitle: subtitle, icon: icon, kind: kind, payload: payload, category: category, score: match.score, tier: match.tier)
     }
 
-    private static func make(id: String, title: String, subtitle: String, icon: String, kind: String, payload: String, category: String, score: Double, tier: Int = 0) -> SearchResult {
-        SearchResult(id: id, title: title, subtitle: subtitle, icon: icon, kind: kind, payload: payload, category: category, score: score, tier: tier)
+    private static func make(id: String, title: String, subtitle: String, icon: String, kind: String, payload: String, category: String, score: Double, tier: Int = 0, badge: String = "", badgeName: String = "") -> SearchResult {
+        SearchResult(id: id, title: title, subtitle: subtitle, icon: icon, kind: kind, payload: payload, category: category, score: score, tier: tier, badge: badge, badgeName: badgeName)
     }
 
     /// Background helpers under CoreServices are not launcher apps.
@@ -532,7 +532,7 @@ public enum Search {
                 let placeholder = clip.text.isEmpty || clip.text == "Image"
                 title = placeholder ? "Image" : row.title
                 subtitle = placeholder || row.subtitle == "Clipboard image" ? "Clipboard image" : row.subtitle
-                icon = clip.imageFile.map { "file:\($0)" } ?? "symbol:photo"
+                icon = clip.imageFile.map { "clipimage:\($0)" } ?? "symbol:photo"
             case "file":
                 let paths = clip.filePaths ?? []
                 title = paths.prefix(2).map { ($0 as NSString).lastPathComponent }.joined(separator: ", ")
@@ -544,6 +544,7 @@ public enum Search {
                 subtitle = row.subtitle
                 icon = "symbol:doc.on.clipboard"
             }
+            let source = clip.sourcePath ?? ""
             clips.append(make(
                 id: "clip:\(clip.id.uuidString)",
                 title: title,
@@ -552,7 +553,9 @@ public enum Search {
                 kind: "clipboard",
                 payload: clip.id.uuidString,
                 category: "clipboard",
-                score: 1.4
+                score: 1.4,
+                badge: source.isEmpty ? "" : "file:\(source)",
+                badgeName: clip.sourceName ?? ""
             ))
         }
         if context.preferences.clipboardSnippetsAtTop {

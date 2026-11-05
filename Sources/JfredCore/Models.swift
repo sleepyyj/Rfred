@@ -731,8 +731,11 @@ public struct ClipItem: Codable, Equatable, Sendable, Identifiable {
     public var rtf: Data?
     /// "png" or "tiff". Absent clips were saved as PNG.
     public var imageType: String?
+    /// Bundle path of the app that owned the pasteboard when this clip was copied.
+    public var sourcePath: String?
+    public var sourceName: String?
 
-    public init(id: UUID = UUID(), text: String, date: Date, kind: String? = nil, imageFile: String? = nil, filePaths: [String]? = nil, html: Data? = nil, rtf: Data? = nil, imageType: String? = nil) {
+    public init(id: UUID = UUID(), text: String, date: Date, kind: String? = nil, imageFile: String? = nil, filePaths: [String]? = nil, html: Data? = nil, rtf: Data? = nil, imageType: String? = nil, sourcePath: String? = nil, sourceName: String? = nil) {
         self.id = id
         self.text = text
         self.date = date
@@ -742,6 +745,8 @@ public struct ClipItem: Codable, Equatable, Sendable, Identifiable {
         self.html = html
         self.rtf = rtf
         self.imageType = imageType
+        self.sourcePath = sourcePath
+        self.sourceName = sourceName
     }
 }
 
@@ -854,8 +859,11 @@ public struct SearchResult: Equatable, Sendable, Identifiable {
     public var score: Double
     /// Match quality. Lower is better: exact, prefix, word prefix, substring, fuzzy.
     public var tier: Int
+    /// Small icon drawn at the top-right of a launcher row. Empty hides it.
+    public var badge: String
+    public var badgeName: String
 
-    public init(id: String, title: String, subtitle: String, icon: String, kind: String, payload: String, category: String, score: Double, tier: Int = 0) {
+    public init(id: String, title: String, subtitle: String, icon: String, kind: String, payload: String, category: String, score: Double, tier: Int = 0, badge: String = "", badgeName: String = "") {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -865,6 +873,8 @@ public struct SearchResult: Equatable, Sendable, Identifiable {
         self.category = category
         self.score = score
         self.tier = tier
+        self.badge = badge
+        self.badgeName = badgeName
     }
 }
 
