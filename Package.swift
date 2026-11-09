@@ -30,6 +30,8 @@ let package = Package(
                 .linkedFramework("UserNotifications"),
                 .linkedFramework("Vision"),
                 .linkedFramework("ImageIO"),
+                .linkedFramework("QuickLookUI"),
+                .linkedFramework("Quartz"),
             ]
         ),
         .testTarget(

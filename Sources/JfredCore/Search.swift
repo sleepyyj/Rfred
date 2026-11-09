@@ -8,7 +8,9 @@ public enum Search {
         if raw.hasPrefix(" "), context.preferences.quickSearchEnabled {
             return cap(fileResults(query: raw.trimmingCharacters(in: .whitespacesAndNewlines), context: context), context: context)
         }
-        if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return [] }
+        if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return defaultEmptyResults(context: context)
+        }
         if let forced = context.forcedResults {
             return Array(forced.prefix(12))
         }
@@ -112,7 +114,7 @@ public enum Search {
         for app in context.apps where includeApp(path: app.path) {
             push(scored(
                 query: needle,
-                fields: [app.name],
+                fields: matchFields(forName: app.name, aliases: app.aliases),
                 id: "app:\(app.path)",
                 title: app.name,
                 subtitle: app.path,
@@ -447,29 +449,103 @@ public enum Search {
 
     private static func dedupe(_ items: [SearchResult], query: String = "", context: SearchContext? = nil) -> [SearchResult] {
         let folded = fold(query)
+        let shortQuery = folded.count > 0 && folded.count <= 3
         let latched = context?.preferences.topResultLatching == true ? context?.knowledge[folded] : nil
+        let now = context?.now ?? Date()
         let sorted = items.sorted { lhs, rhs in
             let lhsBand = rankBand(lhs, query: query)
             let rhsBand = rankBand(rhs, query: query)
             if lhsBand != rhsBand { return lhsBand < rhsBand }
-            if lhs.tier != rhs.tier { return lhs.tier < rhs.tier }
             let lhsLatch = lhs.id == latched
             let rhsLatch = rhs.id == latched
-            if lhsLatch != rhsLatch { return lhsLatch }
-            let lhsUsed = (context?.selections[lhs.id]?.count ?? 0) > 0
-            let rhsUsed = (context?.selections[rhs.id]?.count ?? 0) > 0
-            if lhsUsed != rhsUsed { return lhsUsed }
-            if lhs.score != rhs.score { return lhs.score > rhs.score }
-            let lhsTime = context?.selections[lhs.id]?.lastSelected ?? .distantPast
-            let rhsTime = context?.selections[rhs.id]?.lastSelected ?? .distantPast
-            if lhsTime != rhsTime { return lhsTime > rhsTime }
-            let lhsCount = context?.selections[lhs.id]?.count ?? 0
-            let rhsCount = context?.selections[rhs.id]?.count ?? 0
-            if lhsCount != rhsCount { return lhsCount > rhsCount }
+            if lhsLatch != rhsLatch {
+                // Short queries lean harder on the latched top result.
+                if shortQuery { return lhsLatch }
+                return lhsLatch
+            }
+            if lhs.tier != rhs.tier { return lhs.tier < rhs.tier }
+            let lhsStat = context?.selections[lhs.id]
+            let rhsStat = context?.selections[rhs.id]
+            let lhsFreq = selectionFrecency(count: lhsStat?.count ?? 0, lastSelected: lhsStat?.lastSelected ?? .distantPast, now: now)
+            let rhsFreq = selectionFrecency(count: rhsStat?.count ?? 0, lastSelected: rhsStat?.lastSelected ?? .distantPast, now: now)
+            let lhsTotal = lhs.score + min(0.45, lhsFreq * 0.08)
+            let rhsTotal = rhs.score + min(0.45, rhsFreq * 0.08)
+            if shortQuery && lhsLatch != rhsLatch { return lhsLatch }
+            if abs(lhsTotal - rhsTotal) > 0.0001 { return lhsTotal > rhsTotal }
+            if lhsFreq != rhsFreq { return lhsFreq > rhsFreq }
             return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
         }
         var seen = Set<String>()
         return sorted.filter { seen.insert($0.id).inserted }
+    }
+
+    /// Recent apps, clipboard clips and usage-backed rows shown for an empty query.
+    private static func defaultEmptyResults(context: SearchContext) -> [SearchResult] {
+        var rows: [SearchResult] = []
+        let now = context.now
+        let rankedApps = context.apps
+            .filter { includeApp(path: $0.path) }
+            .compactMap { app -> (AppRecord, Double)? in
+                let id = "app:\(app.path)"
+                guard let stat = context.selections[id], stat.count > 0 else { return nil }
+                return (app, selectionFrecency(count: stat.count, lastSelected: stat.lastSelected, now: now))
+            }
+            .sorted { $0.1 > $1.1 }
+            .prefix(8)
+        for (app, freq) in rankedApps {
+            rows.append(make(
+                id: "app:\(app.path)",
+                title: app.name,
+                subtitle: app.path,
+                icon: "file:\(app.path)",
+                kind: "app",
+                payload: app.path,
+                category: "general",
+                score: 1.2 + min(0.4, freq * 0.05)
+            ))
+        }
+        if context.preferences.clipboardEnabled {
+            for clip in context.clips.prefix(5) {
+                let kind = clip.kind ?? "text"
+                let row = ClipboardText.row(
+                    text: clip.text,
+                    fallback: kind == "image" ? "Clipboard image" : (kind == "file" ? "Clipboard files" : "Clipboard")
+                )
+                let icon: String
+                if kind == "image", let file = clip.imageFile, !file.isEmpty {
+                    icon = "clipimage:\(file)"
+                } else if kind == "file" {
+                    icon = "symbol:doc.on.doc"
+                } else {
+                    icon = "symbol:doc.on.clipboard"
+                }
+                rows.append(make(
+                    id: "clip:\(clip.id.uuidString)",
+                    title: row.title,
+                    subtitle: "Clipboard History",
+                    icon: icon,
+                    kind: "clipboard",
+                    payload: clip.id.uuidString,
+                    category: "clipboard",
+                    score: 1.05
+                ))
+            }
+        }
+        if rows.isEmpty {
+            for app in context.apps.prefix(8) where includeApp(path: app.path) {
+                rows.append(make(
+                    id: "app:\(app.path)",
+                    title: app.name,
+                    subtitle: app.path,
+                    icon: "file:\(app.path)",
+                    kind: "app",
+                    payload: app.path,
+                    category: "general",
+                    score: 1
+                ))
+            }
+        }
+        return Array(rows.prefix(resultLimit))
     }
 
     private static func cap(_ items: [SearchResult], query: String = "", context: SearchContext? = nil) -> [SearchResult] {

@@ -39,7 +39,9 @@ struct CoreTests {
 
         let missing = Search.results(for: "zzzz-no-such", context: context)
         #expect(missing.contains { $0.title.contains("Google") })
-        #expect(Search.results(for: "", context: context).isEmpty)
+        let emptyRows = Search.results(for: "", context: context)
+        #expect(!emptyRows.isEmpty)
+        #expect(emptyRows.contains { $0.kind == "app" })
         #expect(Search.results(for: " ", context: context).first?.kind == "text")
         #expect(Search.results(for: "2+2*3", context: context).first?.title == "8")
     }
@@ -61,6 +63,22 @@ struct CoreTests {
         #expect(rows.filter { $0.kind == "settings" }.allSatisfy { fold($0.title).contains("disp") })
         if let notes, let displays {
             #expect(displays < notes)
+        }
+    }
+
+    @Test func camelInitialsAndPinyinMatchApps() {
+        #expect(camelInitials("HostPane") == "hp")
+        #expect(fieldMatch(query: "hp", target: "HostPane")?.tier == 2)
+        var context = SearchContext()
+        context.apps = [
+            AppRecord(id: "host", name: "HostPane", path: "/Applications/HostPane.app", aliases: Array(matchFields(forName: "HostPane").dropFirst())),
+            AppRecord(id: "wechat", name: "微信", path: "/Applications/WeChat.app", aliases: Array(matchFields(forName: "微信").dropFirst())),
+        ]
+        #expect(Search.results(for: "hp", context: context).contains { $0.title == "HostPane" })
+        let variants = pinyinVariants("微信")
+        #expect(!variants.isEmpty)
+        if let initials = variants.last, initials.count >= 2 {
+            #expect(Search.results(for: initials, context: context).contains { $0.title == "微信" })
         }
     }
 

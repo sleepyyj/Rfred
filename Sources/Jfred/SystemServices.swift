@@ -91,7 +91,7 @@ enum AppIndexer {
     private static func finderRecord() -> AppRecord? {
         let path = "/System/Library/CoreServices/Finder.app"
         guard FileManager.default.fileExists(atPath: path) else { return nil }
-        return AppRecord(id: path, name: "Finder", path: path)
+        return AppRecord(id: path, name: "Finder", path: path, aliases: matchFields(forName: "Finder"))
     }
 
     static func applications(preferences: Preferences) -> [AppRecord] {
@@ -133,7 +133,8 @@ enum AppIndexer {
                 if ext == "prefpane" {
                     name = PreferencePaneNames.displayName(for: resolved, fallback: name)
                 }
-                results.append(AppRecord(id: resolved.path, name: name, path: resolved.path))
+                let aliases = bundleAliases(for: resolved, displayName: name)
+                results.append(AppRecord(id: resolved.path, name: name, path: resolved.path, aliases: aliases))
                 enumerator.skipDescendants()
                 continue
             }
@@ -143,6 +144,26 @@ enum AppIndexer {
             }
         }
         return results
+    }
+
+
+    private static func bundleAliases(for url: URL, displayName: String) -> [String] {
+        var aliases: [String] = []
+        let plistURL = url.appendingPathComponent("Contents/Info.plist")
+        if let data = try? Data(contentsOf: plistURL),
+           let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] {
+            for key in ["CFBundleName", "CFBundleDisplayName"] {
+                if let value = plist[key] as? String {
+                    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty,
+                       trimmed.caseInsensitiveCompare(displayName) != .orderedSame,
+                       !aliases.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+                        aliases.append(trimmed)
+                    }
+                }
+            }
+        }
+        return Array(matchFields(forName: displayName, aliases: aliases).dropFirst())
     }
 
     private static func resolvedBundle(_ url: URL) -> URL {
@@ -212,23 +233,6 @@ enum PreferencePaneNames {
     }
 }
 
-private final class AppRecordBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var items: [AppRecord] = []
-
-    func append(_ rows: [AppRecord]) {
-        lock.lock()
-        items.append(contentsOf: rows)
-        lock.unlock()
-    }
-
-    var values: [AppRecord] {
-        lock.lock()
-        defer { lock.unlock() }
-        return items
-    }
-}
-
 enum FileSearch {
     static func files(query: String, preferences: Preferences) -> [AppRecord] {
         let safe = query.replacingOccurrences(of: "\"", with: "").trimmingCharacters(in: .whitespaces)
@@ -239,26 +243,34 @@ enum FileSearch {
         return spotlight(query: safe, preferences: preferences)
     }
 
+    /// Metadata lookup used only while FileIndex is still warming. Avoids
+    /// spawning `mdfind` and never blocks the main thread; callers already run
+    /// this off-main. Caps wait so the launcher can keep streaming.
     private static func spotlight(query: String, preferences: Preferences) -> [AppRecord] {
-        let predicate = "kMDItemDisplayName == \"*\(query)*\"c"
-        let roots = scopeRoots(preferences)
-        let found = AppRecordBox()
-        let group = DispatchGroup()
-        for root in roots.prefix(8) {
-            group.enter()
-            DispatchQueue.global(qos: .userInitiated).async {
-                let text = Shell.run("/usr/bin/mdfind", ["-onlyin", root, predicate], timeout: 1.1)
-                let rows = text.split(separator: "\n").prefix(15).map { line -> AppRecord in
-                    let path = String(line)
-                    return AppRecord(id: path, name: FileManager.default.displayName(atPath: path), path: path)
-                }
-                found.append(rows)
-                group.leave()
-            }
+        let safe = query.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        let predicate = "kMDItemDisplayName == \"*\(safe)*\"c" as CFString
+        guard let mdQuery = MDQueryCreate(kCFAllocatorDefault, predicate, nil, nil) else { return [] }
+        let roots = scopeRoots(preferences).prefix(8).map { $0 as CFString }
+        if !roots.isEmpty {
+            MDQuerySetSearchScope(mdQuery, roots as CFArray, 0)
         }
-        _ = group.wait(timeout: .now() + 1.5)
-        var seen = Set<String>()
-        return found.values.filter { seen.insert($0.path).inserted }.prefix(preferences.fileSearchMax).map { $0 }
+        MDQuerySetMaxCount(mdQuery, preferences.fileSearchMax)
+        // Synchronous execute off the main thread keeps results simple without UI stalls.
+        guard MDQueryExecute(mdQuery, CFOptionFlags(kMDQuerySynchronous.rawValue)) else { return [] }
+        defer { MDQueryStop(mdQuery) }
+        var rows: [AppRecord] = []
+        let count = MDQueryGetResultCount(mdQuery)
+        for index in 0..<count {
+            guard let raw = MDQueryGetResultAtIndex(mdQuery, index) else { continue }
+            let item = Unmanaged<MDItem>.fromOpaque(UnsafeRawPointer(raw)).takeUnretainedValue()
+            guard let pathValue = MDItemCopyAttribute(item, kMDItemPath) else { continue }
+            let path = pathValue as? String ?? String(describing: pathValue)
+            guard path.hasPrefix("/") else { continue }
+            let name = FileManager.default.displayName(atPath: path)
+            rows.append(AppRecord(id: path, name: name, path: path))
+            if rows.count >= preferences.fileSearchMax { break }
+        }
+        return rows
     }
 
     static func scopeRoots(_ preferences: Preferences) -> [String] {

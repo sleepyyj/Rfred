@@ -81,8 +81,14 @@ private let hotkeyCallback: EventHandlerUPP = { _, event, _ in
     )
     if status == noErr {
         let id = hotkeyID.id
-        Task { @MainActor in
+        // Carbon delivers this on the main thread. Fire immediately so the
+        // launcher appears without an extra MainActor Task hop.
+        if Thread.isMainThread {
             HotkeyCenter.shared.fire(id)
+        } else {
+            DispatchQueue.main.async {
+                HotkeyCenter.shared.fire(id)
+            }
         }
     }
     return noErr

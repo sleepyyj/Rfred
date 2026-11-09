@@ -175,6 +175,9 @@ final class AppModel {
     }
 
     private var generation = 0
+    /// Short-lived Script Filter results keyed by "workflowID|argument".
+    private var scriptFilterCache: [String: (date: Date, rows: [SearchResult])] = [:]
+    private var searchingSubtitle: String?
     /// Query string last written into `results`. Selection resets only when it changes.
     private var renderedQuery = ""
     private var historyCursor: Int?
@@ -253,7 +256,18 @@ final class AppModel {
         let useWorkflows = !raw.hasPrefix(" ") && !trimmed.hasPrefix(">")
         if useWorkflows, let match = WorkflowRuntime.match(in: workflows, query: trimmed, disabledBuiltins: disabledBuiltins) {
             if match.input.kind == .scriptFilter || match.input.kind == .listFilter {
-                publishResults([statusRow(id: "run:pending", title: "Running…", subtitle: match.invocation.keyword, icon: "symbol:\(match.workflow.symbol)", category: "action")])
+                let cacheKey = "\(match.workflow.id.uuidString)|\(match.invocation.argument)"
+                if let cached = scriptFilterCache[cacheKey], Date().timeIntervalSince(cached.date) < 8 {
+                    publishResults(cached.rows)
+                    return
+                }
+                // Keep the previous list visible; mark the subtitle instead of flashing "Running…".
+                if results.isEmpty {
+                    publishResults([statusRow(id: "run:pending", title: match.invocation.keyword, subtitle: "Running…", icon: "symbol:\(match.workflow.symbol)", category: "action")])
+                } else {
+                    searchingSubtitle = "Running…"
+                    launcher?.layout(animated: false)
+                }
                 let workflow = match.workflow
                 let invocation = match.invocation
                 let job = Task.detached {
@@ -262,10 +276,16 @@ final class AppModel {
                 Task {
                     let ran = await job.value
                     guard token == self.generation else { return }
+                    self.searchingSubtitle = nil
                     let result = ran ?? WorkflowScriptFilterResult(items: [])
                     let rows = result.items.isEmpty
                         ? [self.statusRow(id: "run:empty", title: "No matches", subtitle: match.invocation.keyword, icon: "symbol:\(match.workflow.symbol)", category: "action")]
                         : WorkflowRuntime.rows(for: match, result: result)
+                    self.scriptFilterCache[cacheKey] = (Date(), rows)
+                    if self.scriptFilterCache.count > 40 {
+                        let trimmed = self.scriptFilterCache.sorted { $0.value.date > $1.value.date }.prefix(24)
+                        self.scriptFilterCache = Dictionary(uniqueKeysWithValues: trimmed.map { ($0.key, $0.value) })
+                    }
                     self.publishResults(rows)
                 }
                 return
@@ -303,9 +323,14 @@ final class AppModel {
                 return
             }
         }
-        if !results.contains(where: { $0.kind == "file" || $0.id == "file:hint" || $0.id == "search:pending" }) {
+        // Keep existing rows while the exclusive file lookup runs. Only show a
+        // placeholder when there is nothing on screen yet.
+        if results.isEmpty {
             let subtitle = trimmed.isEmpty ? "Files" : trimmed
             publishResults([statusRow(id: "search:pending", title: "Searching…", subtitle: subtitle, icon: "symbol:magnifyingglass", category: "navigation")])
+        } else {
+            searchingSubtitle = "Searching…"
+            launcher?.layout(animated: false)
         }
         let job = Task.detached {
             var working = context
@@ -319,6 +344,7 @@ final class AppModel {
         Task {
             let rows = await job.value
             guard token == self.generation else { return }
+            self.searchingSubtitle = nil
             self.publishResults(rows)
         }
     }
@@ -371,6 +397,14 @@ final class AppModel {
     func hideLauncher(reactivate: Bool) {
         transientItem = nil
         launcherVisible = false
+        actionPanelVisible = false
+        actionDrilled = false
+        if !preferences.showLatestQuery {
+            query = ""
+            results = []
+            selection = 0
+            renderedQuery = ""
+        }
         SnippetExpander.shared.setSuspended(false)
         launcher?.hide()
         if reactivate, let previousApp {
@@ -821,7 +855,7 @@ final class AppModel {
         if preferences.noPreviewPaths.contains(where: { !$0.isEmpty && path.hasPrefix($0) }) { return }
         let ext = (path as NSString).pathExtension.lowercased()
         if !ext.isEmpty, preferences.noPreviewTypes.contains(where: { $0.lowercased() == ext || $0.lowercased() == "public.\(ext)" }) { return }
-        Task.detached { _ = Shell.run("/usr/bin/qlmanage", ["-p", path], timeout: 30) }
+        launcher?.showQuickLook(path: path)
     }
 
     func addBuffer() {
@@ -2028,9 +2062,7 @@ final class AppModel {
         ClipboardBoard.write(clip, to: NSPasteboard.general)
         hideLauncher(reactivate: true)
         guard preferences.clipboardAutoPaste else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            postKey(9, flags: .maskCommand)
-        }
+        pasteIntoPreviousApp()
     }
 
     private func pasteToPrevious(_ text: String) {
@@ -2040,14 +2072,40 @@ final class AppModel {
         board.clearContents()
         board.setString(text, forType: .string)
         hideLauncher(reactivate: true)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            postKey(9, flags: .maskCommand)
+        pasteIntoPreviousApp {
             if restore {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                     board.clearContents()
                     if let previous { board.setString(previous, forType: .string) }
                 }
             }
+        }
+    }
+
+    /// Wait for the previous app to become active (or the configured delay), then
+    /// synthesize ⌘V. Retries once if the frontmost app is still Jfred.
+    private func pasteIntoPreviousApp(after: (() -> Void)? = nil) {
+        let delayMs = max(0, preferences.pasteDelayMs)
+        let target = previousApp
+        func firePaste(tries: Int) {
+            let front = NSWorkspace.shared.frontmostApplication
+            let ready = target == nil
+                || front?.processIdentifier == target?.processIdentifier
+                || front?.bundleIdentifier != Bundle.main.bundleIdentifier
+            if ready || tries >= 1 {
+                postKey(9, flags: .maskCommand)
+                after?()
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                firePaste(tries: 1)
+            }
+        }
+        if let target {
+            target.activate()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delayMs)) {
+            firePaste(tries: 0)
         }
     }
 
@@ -2185,16 +2243,16 @@ final class AppModel {
 
     func applyHotkeys() {
         let ok = HotkeyCenter.shared.register(id: 1, keyCode: UInt32(preferences.hotkey.keyCode), modifiers: preferences.hotkey.carbonModifiers) { [weak self] in
-            Task { @MainActor in self?.toggleLauncher() }
+            Self.runOnMain { self?.toggleLauncher() }
         }
         let selectionHotkeyOK = HotkeyCenter.shared.register(id: 2, keyCode: 42, modifiers: Hotkey(keyCode: 42, modifiers: Hotkey.option | Hotkey.command).carbonModifiers) { [weak self] in
-            Task { @MainActor in self?.showSelectionActions() }
+            Self.runOnMain { self?.showSelectionActions() }
         }
         selectionHotkeyWarning = selectionHotkeyOK ? "" : "⌥⌘\\ is already used by another app."
         if preferences.clipboardEnabled {
             let clipboardHotkey = Hotkey(keyCode: 8, modifiers: Hotkey.option | Hotkey.command)
             let clipboardHotkeyOK = HotkeyCenter.shared.register(id: 3, keyCode: UInt32(clipboardHotkey.keyCode), modifiers: clipboardHotkey.carbonModifiers) { [weak self] in
-                Task { @MainActor in self?.showClipboardViewer() }
+                Self.runOnMain { self?.showClipboardViewer() }
             }
             clipboardHotkeyWarning = clipboardHotkeyOK ? "" : "⌥⌘C is already used by another app."
         } else {
@@ -2220,7 +2278,7 @@ final class AppModel {
             }
             let keyword = workflow.keyword
             let registered = HotkeyCenter.shared.register(id: id, keyCode: UInt32(hotkey.keyCode), modifiers: hotkey.carbonModifiers, handler: { [weak self] in
-                Task { @MainActor in
+                Self.runOnMain {
                     self?.query = keyword + " "
                     self?.showLauncher()
                 }
@@ -2228,6 +2286,16 @@ final class AppModel {
             if registered {
                 workflowHotkeyIDs.append(id)
             }
+        }
+    }
+
+    /// HotkeyCenter already hops to the main thread once. Call handlers directly
+    /// when we are on main; otherwise one async hop is enough.
+    private static func runOnMain(_ body: @escaping @MainActor () -> Void) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated { body() }
+        } else {
+            DispatchQueue.main.async { body() }
         }
     }
 

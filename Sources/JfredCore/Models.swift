@@ -153,6 +153,8 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var largeTypeSize: Double
     public var largeTypeFont: String
     public var quickLookEnabled: Bool
+    /// Milliseconds to wait after activating the previous app before synthesizing ⌘V.
+    public var pasteDelayMs: Int
     public var terminalApp: String
     public var fileSearchMax: Int
     public var remoteEnabled: Bool
@@ -328,6 +330,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         largeTypeSize = 96
         largeTypeFont = "System"
         quickLookEnabled = true
+        pasteDelayMs = 80
         terminalApp = "iTerm"
         fileSearchMax = 20
         remoteEnabled = false
@@ -433,7 +436,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         case selectionHotkeyMode, modifierControl, modifierOption, modifierCommand
         case syncFolder, snippetsEnabled, clipboardEnabled, clipboardLimit
         case calculatorEnabled, dictionaryEnabled, onePasswordEnabled
-        case largeTypeSize, largeTypeFont, quickLookEnabled, terminalApp, fileSearchMax
+        case largeTypeSize, largeTypeFont, quickLookEnabled, pasteDelayMs, terminalApp, fileSearchMax
         case remoteEnabled, remoteLocalOnly, remoteToken, remotePort, autoUpdateCheck
         case recentQueries, lastQueryDate, newsletterEmail, safariBookmarks, chromeBookmarks
         case fileBufferEnabled
@@ -512,6 +515,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         largeTypeSize = value(.largeTypeSize, d.largeTypeSize)
         largeTypeFont = value(.largeTypeFont, d.largeTypeFont)
         quickLookEnabled = value(.quickLookEnabled, d.quickLookEnabled)
+        pasteDelayMs = value(.pasteDelayMs, d.pasteDelayMs)
         terminalApp = value(.terminalApp, d.terminalApp)
         fileSearchMax = value(.fileSearchMax, d.fileSearchMax)
         remoteEnabled = value(.remoteEnabled, d.remoteEnabled)
@@ -766,11 +770,26 @@ public struct AppRecord: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var name: String
     public var path: String
+    /// Extra match keys: CFBundleName, English name, pinyin, camel initials.
+    public var aliases: [String]
 
-    public init(id: String, name: String, path: String) {
+    public init(id: String, name: String, path: String, aliases: [String] = []) {
         self.id = id
         self.name = name
         self.path = path
+        self.aliases = aliases
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        path = try container.decode(String.self, forKey: .path)
+        aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, path, aliases
     }
 }
 

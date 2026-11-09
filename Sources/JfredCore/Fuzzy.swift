@@ -4,7 +4,7 @@ public func fold(_ text: String) -> String {
     text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
 }
 
-/// Lower is better: exact, prefix, word prefix, substring, then fuzzy.
+/// Lower is better: exact, prefix, word prefix / camel initials, substring, then fuzzy.
 public struct FieldMatch: Equatable, Sendable {
     public var tier: Int
     public var score: Double
@@ -13,6 +13,67 @@ public struct FieldMatch: Equatable, Sendable {
         self.tier = tier
         self.score = score
     }
+}
+
+/// CamelCase / spaced word initials, e.g. "Host Pane" / "HostPane" → "hp".
+public func camelInitials(_ text: String) -> String {
+    var initials: [Character] = []
+    let scalars = Array(text)
+    for (index, character) in scalars.enumerated() {
+        guard character.isLetter || character.isNumber else { continue }
+        if index == 0 {
+            initials.append(Character(character.lowercased()))
+            continue
+        }
+        let previous = scalars[index - 1]
+        let boundary = !previous.isLetter && !previous.isNumber
+        let camel = character.isUppercase && previous.isLowercase
+        if boundary || camel {
+            initials.append(Character(character.lowercased()))
+        }
+    }
+    return String(initials)
+}
+
+/// Mandarin Latin pinyin (full spelling + initials) for Chinese display names.
+public func pinyinVariants(_ text: String) -> [String] {
+    guard text.unicodeScalars.contains(where: { $0.value >= 0x4E00 && $0.value <= 0x9FFF }) else {
+        return []
+    }
+    let mutable = NSMutableString(string: text)
+    CFStringTransform(mutable, nil, kCFStringTransformToLatin, false)
+    CFStringTransform(mutable, nil, kCFStringTransformStripDiacritics, false)
+    let latin = fold(String(mutable))
+        .replacingOccurrences(of: "'", with: "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !latin.isEmpty else { return [] }
+    let compact = latin.replacingOccurrences(of: " ", with: "")
+    let words = latin.split { !$0.isLetter && !$0.isNumber }.map(String.init)
+    let initials = words.compactMap(\.first).map(String.init).joined()
+    var variants: [String] = []
+    for candidate in [latin, compact, initials] where !candidate.isEmpty {
+        if !variants.contains(candidate) { variants.append(candidate) }
+    }
+    return variants
+}
+
+public func matchFields(forName name: String, aliases: [String] = []) -> [String] {
+    var fields = [name]
+    for alias in aliases where !alias.isEmpty {
+        if !fields.contains(where: { $0.caseInsensitiveCompare(alias) == .orderedSame }) {
+            fields.append(alias)
+        }
+    }
+    for variant in pinyinVariants(name) {
+        if !fields.contains(where: { fold($0) == fold(variant) }) {
+            fields.append(variant)
+        }
+    }
+    let initials = camelInitials(name)
+    if initials.count >= 2, !fields.contains(where: { fold($0) == fold(initials) }) {
+        fields.append(initials)
+    }
+    return fields
 }
 
 public func fieldMatch(query: String, target: String) -> FieldMatch? {
@@ -31,6 +92,11 @@ public func fieldMatch(query: String, target: String) -> FieldMatch? {
     if words.contains(where: { $0.hasPrefix(q) }) {
         if tier == nil { tier = 2 }
         score = max(score, 0.93)
+    }
+    let initials = camelInitials(target)
+    if !initials.isEmpty, fold(initials).hasPrefix(q), q.count >= 2 {
+        if tier == nil { tier = 2 }
+        score = max(score, 0.91)
     }
     if t.contains(q) {
         if tier == nil { tier = 3 }
@@ -79,4 +145,13 @@ public func fuzzyScore(query: String, target: String) -> Double? {
 
 public func bestFuzzyScore(query: String, fields: [String]) -> Double? {
     bestFieldMatch(query: query, fields: fields)?.score
+}
+
+/// Continuous frecency used in launcher ranking.
+public func selectionFrecency(count: Int, lastSelected: Date, now: Date) -> Double {
+    guard count > 0 else { return 0 }
+    let age = max(0, now.timeIntervalSince(lastSelected))
+    let halfLife: TimeInterval = 14 * 24 * 3600
+    let decay = pow(0.5, age / halfLife)
+    return Double(count) * decay
 }

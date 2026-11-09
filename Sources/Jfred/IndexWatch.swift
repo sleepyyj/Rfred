@@ -195,7 +195,7 @@ final class IndexWatch: @unchecked Sendable {
         }
         files.start(paths: paths, latency: 0.5)
         let snapshot = preferences
-        DispatchQueue.global(qos: .utility).async {
+        DispatchQueue.global(qos: .userInitiated).async {
             FileIndex.shared.replaceAll(FileCatalog.collect(preferences: snapshot))
         }
     }

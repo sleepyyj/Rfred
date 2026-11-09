@@ -1,6 +1,7 @@
 import AppKit
 import JfredCore
 import QuartzCore
+import QuickLookUI
 import SwiftUI
 
 final class LauncherPanel: NSPanel {
@@ -13,8 +14,11 @@ final class LauncherController {
     let model: AppModel
     private var panel: LauncherPanel?
     private var largePanel: NSPanel?
-    private var localMonitor: Any?
-    private var globalMonitor: Any?
+    nonisolated(unsafe) private var keyMonitor: Any?
+    nonisolated(unsafe) private var mouseMonitor: Any?
+    nonisolated(unsafe) private var globalMonitor: Any?
+    private var quickLookPath: String?
+    private var quickLookController: QuickLookPreviewController?
     private var pinnedTop: CGFloat?
     private var hasPlaced = false
     private var ignoreMove = false
@@ -56,16 +60,42 @@ final class LauncherController {
                 }
             }
         }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             return self.handle(event)
+        }
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+            self?.localMouse(event) ?? event
         }
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
             self?.globalMouse(event)
         }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
-            self?.localMouse(event) ?? event
+    }
+
+    deinit {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
+        if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
+    }
+
+    func showQuickLook(path: String) {
+        quickLookPath = path
+        let controller = quickLookController ?? QuickLookPreviewController()
+        quickLookController = controller
+        controller.path = path
+        guard let preview = QLPreviewPanel.shared() else { return }
+        preview.dataSource = controller
+        preview.delegate = controller
+        preview.reloadData()
+        if let panel, let screen = panel.screen ?? NSScreen.main {
+            var frame = preview.frame
+            if frame.width < 480 { frame.size.width = 640 }
+            if frame.height < 320 { frame.size.height = 480 }
+            frame.origin.x = panel.frame.midX - frame.width / 2
+            frame.origin.y = max(screen.visibleFrame.minY + 40, panel.frame.minY - frame.height - 12)
+            preview.setFrame(frame, display: false)
         }
+        preview.makeKeyAndOrderFront(nil)
     }
 
     func show() {
@@ -840,5 +870,19 @@ struct PreviewLauncher: View {
                 .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
         )
         .shadow(color: .black.opacity(0.26), radius: 24, y: 12)
+    }
+}
+
+
+final class QuickLookPreviewController: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
+    var path: String?
+
+    func numberOfPreviewItems(in panel: QLPreviewPanel) -> Int {
+        path == nil ? 0 : 1
+    }
+
+    func previewPanel(_ panel: QLPreviewPanel, previewItemAt index: Int) -> (any QLPreviewItem)? {
+        guard let path else { return nil }
+        return URL(fileURLWithPath: path) as QLPreviewItem
     }
 }
