@@ -2,6 +2,7 @@ import AppKit
 import JfredCore
 import Foundation
 import ServiceManagement
+import UniformTypeIdentifiers
 
 enum AppRuntime {
     @MainActor static var model: AppModel?
@@ -89,6 +90,8 @@ final class AppModel {
     var actionPanelVisible = false
     var actionIndex = 0
     var launcherActions: [LauncherAction] = []
+    private var actionRoot: [LauncherAction] = []
+    private var actionDrilled = false
     var opItems: [AppRecord] = []
     private(set) var updatePhase: UpdatePhase = .idle
     private(set) var pendingUpdate: UpdateRelease?
@@ -357,6 +360,7 @@ final class AppModel {
         }
         launcherVisible = true
         actionPanelVisible = false
+        actionDrilled = false
         focusToken += 1
         SnippetExpander.shared.setSuspended(true)
         if previousApp != nil { sinkPreferencesBehindOtherApps() }
@@ -419,15 +423,19 @@ final class AppModel {
 
     func showActions() {
         guard results.indices.contains(selection) else { return }
-        launcherActions = actions(for: results[selection])
-        if preferences.uaSortByUsage {
-            launcherActions.sort { lhs, rhs in
+        var actions = actions(for: results[selection])
+        // Application file actions keep the fixed order, so ⌘1–⌘9 stay put.
+        if preferences.uaSortByUsage, results[selection].kind != "app" {
+            actions.sort { lhs, rhs in
                 let left = Int(knowledge["ua.\(lhs.kind.rawValue)"] ?? "") ?? 0
                 let right = Int(knowledge["ua.\(rhs.kind.rawValue)"] ?? "") ?? 0
                 return left > right
             }
         }
-        guard !launcherActions.isEmpty else { return }
+        guard !actions.isEmpty else { return }
+        actionDrilled = false
+        actionRoot = actions
+        launcherActions = actions
         actionPanelVisible = true
         actionIndex = 0
         launcher?.layout()
@@ -436,6 +444,18 @@ final class AppModel {
     func closeActions() {
         guard actionPanelVisible else { return }
         actionPanelVisible = false
+        actionDrilled = false
+        actionIndex = 0
+        launcher?.layout()
+    }
+
+    func backActions() {
+        guard actionDrilled else {
+            closeActions()
+            return
+        }
+        actionDrilled = false
+        launcherActions = actionRoot
         actionIndex = 0
         launcher?.layout()
     }
@@ -445,12 +465,33 @@ final class AppModel {
         actionIndex = (actionIndex + delta + launcherActions.count) % launcherActions.count
     }
 
-    func commitAction() {
-        guard actionPanelVisible, launcherActions.indices.contains(actionIndex), results.indices.contains(selection) else { return }
+    func commitAction(at index: Int? = nil) {
+        let index = index ?? actionIndex
+        guard actionPanelVisible, launcherActions.indices.contains(index), results.indices.contains(selection) else { return }
         let item = results[selection]
-        let action = launcherActions[actionIndex]
-        knowledge["ua.\(action.kind.rawValue)"] = String((Int(knowledge["ua.\(action.kind.rawValue)"] ?? "") ?? 0) + 1)
-        scheduleSave()
+        let action = launcherActions[index]
+        switch action.kind {
+        case .recentDocuments:
+            noteActionUse(FileActionID.recentDocuments.rawValue)
+            showRecentDocuments(item.payload)
+            return
+        case .unavailable:
+            return
+        case .openPath:
+            noteActionUse("openPath")
+            let path = action.argument
+            closeActions()
+            openFile(path)
+            return
+        default:
+            break
+        }
+        if item.kind == "app", let fileAction = action.fileActionID {
+            closeActions()
+            perform(fileAction: fileAction, on: item)
+            return
+        }
+        noteActionUse(action.kind.rawValue)
         let value = item.payload.isEmpty ? item.title : item.payload
         closeActions()
         switch action.kind {
@@ -460,14 +501,7 @@ final class AppModel {
             reveal(item)
             hideLauncher(reactivate: false)
         case .copyPath:
-            let escaped: String
-            if preferences.fileEscapePathForTerminal {
-                escaped = "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
-            } else {
-                escaped = value
-            }
-            writeClipboard(escaped)
-            hideLauncher(reactivate: false)
+            copyPath(value)
         case .copyName:
             writeClipboard(item.title)
             hideLauncher(reactivate: false)
@@ -491,10 +525,61 @@ final class AppModel {
                 NSWorkspace.shared.open(url)
             }
             hideLauncher(reactivate: false)
+        case .recentDocuments, .showPackageContents, .openWith, .getInfo, .copyTo, .moveTo, .delete, .copyReplacing, .moveReplacing, .browseFolder, .openTerminal, .copyFile, .openPath, .unavailable:
+            break
         }
     }
 
+    func perform(fileAction: FileActionID, on item: SearchResult) {
+        let path = item.payload
+        guard path.hasPrefix("/") else { return }
+        noteActionUse(fileAction.rawValue)
+        switch fileAction {
+        case .recentDocuments:
+            showRecentDocuments(path)
+        case .showPackageContents:
+            showPackageContents(path)
+        case .open:
+            run(item, forced: "primary")
+        case .openWith:
+            openWith(path)
+        case .reveal:
+            reveal(item)
+            hideLauncher(reactivate: false)
+        case .getInfo:
+            getInfo(path)
+        case .copyTo:
+            transfer(path, move: false, replace: false)
+        case .moveTo:
+            transfer(path, move: true, replace: false)
+        case .delete:
+            trash(path)
+        case .copyReplacing:
+            transfer(path, move: false, replace: true)
+        case .moveReplacing:
+            transfer(path, move: true, replace: true)
+        case .browseFolder:
+            browseEnclosing(path)
+        case .openTerminal:
+            openTerminal(at: path)
+        case .copyPath:
+            copyPath(path)
+        case .copyFile:
+            copyFile(path)
+        }
+    }
+
+    func openFile(_ path: String) {
+        guard path.hasPrefix("/") else { return }
+        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+        hideLauncher(reactivate: false)
+    }
+
     private func actions(for item: SearchResult) -> [LauncherAction] {
+        let appActions = FileActions.items(kind: item.kind, path: item.payload).map { action in
+            launcherAction(for: action, result: item)
+        }
+        if !appActions.isEmpty { return appActions }
         var actions: [LauncherAction] = []
         switch item.kind {
         case "app", "file", "place":
@@ -534,6 +619,184 @@ final class AppModel {
             actions.append(LauncherAction(kind: .largeType, title: "Large Type", subtitle: item.title, symbol: "textformat.size"))
         }
         return actions
+    }
+
+    private func launcherAction(for action: FileActionItem, result: SearchResult) -> LauncherAction {
+        let subtitle: String
+        switch action.id {
+        case .reveal, .copyPath, .copyFile:
+            subtitle = result.payload
+        case .open:
+            subtitle = result.title
+        default:
+            subtitle = action.subtitle
+        }
+        return LauncherAction(kind: action.id.actionKind, title: action.title, subtitle: subtitle, symbol: action.id.symbol)
+    }
+
+    private func noteActionUse(_ key: String) {
+        knowledge["ua.\(key)"] = String((Int(knowledge["ua.\(key)"] ?? "") ?? 0) + 1)
+        scheduleSave()
+    }
+
+    private func showRecentDocuments(_ path: String) {
+        let documents = RecentDocuments.urls(forAppAt: path)
+        if documents.isEmpty {
+            launcherActions = [LauncherAction(kind: .unavailable, title: "No Recent Documents", subtitle: "Show recent documents for application", symbol: "doc")]
+        } else {
+            launcherActions = documents.map { document in
+                LauncherAction(kind: .openPath, title: document.name, subtitle: document.path, symbol: "doc", argument: document.path)
+            }
+        }
+        actionDrilled = true
+        actionIndex = 0
+        actionPanelVisible = true
+        launcher?.layout()
+    }
+
+    private func showPackageContents(_ path: String) {
+        let contents = URL(fileURLWithPath: path).appendingPathComponent("Contents", isDirectory: true)
+        hideLauncher(reactivate: false)
+        guard FileManager.default.fileExists(atPath: contents.path) else { return }
+        NSWorkspace.shared.open(contents)
+    }
+
+    private func openWith(_ path: String) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.treatsFilePackagesAsDirectories = false
+        panel.prompt = "Open"
+        panel.message = "Choose an application."
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        if let appType = UTType(filenameExtension: "app") {
+            panel.allowedContentTypes = [appType]
+        }
+        resignLauncherForDialog()
+        guard panel.runModal() == .OK, let app = panel.url else { return }
+        let config = NSWorkspace.OpenConfiguration()
+        NSWorkspace.shared.open([URL(fileURLWithPath: path)], withApplicationAt: app, configuration: config)
+    }
+
+    private func getInfo(_ path: String) {
+        let quoted = appleString(path)
+        hideLauncher(reactivate: false)
+        _ = Shell.osascript("""
+        tell application "Finder"
+          activate
+          open information window of (POSIX file \(quoted) as alias)
+        end tell
+        """)
+    }
+
+    private func transfer(_ path: String, move: Bool, replace: Bool) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = move ? "Move" : "Copy"
+        panel.message = replace
+            ? "Choose a folder. An existing item with the same name is replaced."
+            : (move ? "Choose a folder to move into." : "Choose a folder to copy into.")
+        resignLauncherForDialog()
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        let source = URL(fileURLWithPath: path)
+        let destination = folder.appendingPathComponent(source.lastPathComponent)
+        if destination.standardizedFileURL.path == source.standardizedFileURL.path { return }
+        let exists = FileManager.default.fileExists(atPath: destination.path)
+        if exists, !replace {
+            let alert = NSAlert()
+            alert.messageText = "\(source.lastPathComponent) already exists"
+            alert.informativeText = destination.path
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return
+        }
+        let destinationName = source.lastPathComponent
+        Task.detached {
+            do {
+                if exists { try FileManager.default.removeItem(at: destination) }
+                if move {
+                    try FileManager.default.moveItem(at: source, to: destination)
+                } else {
+                    try FileManager.default.copyItem(at: source, to: destination)
+                }
+            } catch {
+                let message = error.localizedDescription
+                await MainActor.run {
+                    let alert = NSAlert()
+                    alert.messageText = "Couldn't \(move ? "move" : "copy") \(destinationName)"
+                    alert.informativeText = message
+                    alert.runModal()
+                }
+            }
+        }
+    }
+
+    private func trash(_ path: String) {
+        let url = URL(fileURLWithPath: path)
+        let alert = NSAlert()
+        alert.messageText = "Move “\(url.lastPathComponent)” to the Trash?"
+        alert.informativeText = path
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Move to Trash")
+        alert.addButton(withTitle: "Cancel")
+        resignLauncherForDialog()
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        } catch {
+            NSAlert(error: error).runModal()
+        }
+    }
+
+    private func browseEnclosing(_ path: String) {
+        let parent = (path as NSString).deletingLastPathComponent
+        guard parent.hasPrefix("/") else { return }
+        closeActions()
+        fromHistory = true
+        query = parent.hasSuffix("/") ? parent : parent + "/"
+    }
+
+    private func openTerminal(at path: String) {
+        let folder = (path as NSString).deletingLastPathComponent
+        guard folder.hasPrefix("/") else { return }
+        let quoted = "'" + folder.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        hideLauncher(reactivate: false)
+        runInTerminal("cd \(quoted)")
+    }
+
+    private func copyPath(_ path: String) {
+        let escaped: String
+        if preferences.fileEscapePathForTerminal {
+            escaped = "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        } else {
+            escaped = path
+        }
+        writeClipboard(escaped)
+        hideLauncher(reactivate: false)
+    }
+
+    private func copyFile(_ path: String) {
+        let board = NSPasteboard.general
+        board.clearContents()
+        board.writeObjects([URL(fileURLWithPath: path) as NSURL])
+        hideLauncher(reactivate: false)
+    }
+
+    private func resignLauncherForDialog() {
+        NSApp.activate(ignoringOtherApps: true)
+        hideLauncher(reactivate: false)
+    }
+
+    private func appleString(_ text: String) -> String {
+        let clean = text.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: "\r", with: "")
+        let escaped = clean
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
     }
 
     func copySelected() {

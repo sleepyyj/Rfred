@@ -735,3 +735,44 @@ extension WorkflowGraphTests {
         #expect(state.effects.contains(.notification(title: "Time: 1700000000", text: "Copied")))
     }
 }
+
+struct FileActionTests {
+    @Test func applicationMenuMatchesFileActions() {
+        let titles = FileActions.items(kind: "app", path: "/Applications/Orbit.app").map(\.title)
+        #expect(titles == [
+            "Recent Documents...",
+            "Show Package Contents",
+            "Open",
+            "Open with...",
+            "Reveal in Finder",
+            "Get Info",
+            "Copy to...",
+            "Move to...",
+            "Delete",
+            "Copy [with Replace] to...",
+            "Move [with Replace] to...",
+            "Browse Folder in Jfred",
+            "Open Terminal Here",
+            "Copy Path to Clipboard",
+            "Copy File to Clipboard",
+        ])
+        #expect(FileActions.items(kind: "app", path: "/Applications/Orbit.app").first?.subtitle == "Show recent documents for application")
+        #expect(FileActions.items(kind: "file", path: "/tmp/notes.txt").isEmpty)
+        #expect(FileActions.items(kind: "app", path: "Orbit").isEmpty)
+    }
+
+    @Test func recentDocumentBookmarksKeepBookBlobs() throws {
+        let book = Data("bookdemo".utf8)
+        let plist: [String: Any] = ["$objects": ["$null", book, "Bookmark", Data("nope".utf8)]]
+        let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
+        #expect(RecentDocuments.bookmarkBlobs(in: data) == [book])
+        #expect(RecentDocuments.bookmarkBlobs(in: Data("not a plist".utf8)).isEmpty)
+    }
+
+    @Test func textEditRecentDocumentsPointAtExistingFiles() {
+        let path = "/System/Applications/TextEdit.app"
+        guard FileManager.default.fileExists(atPath: path) else { return }
+        let items = RecentDocuments.urls(forAppAt: path)
+        #expect(items.allSatisfy { $0.path.hasPrefix("/") && FileManager.default.fileExists(atPath: $0.path) })
+    }
+}

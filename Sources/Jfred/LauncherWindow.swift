@@ -275,12 +275,18 @@ final class LauncherController {
         if defersToInputMethod(event) { return event }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if model.actionPanelVisible {
+            if flags.contains(.command),
+               let chars = event.charactersIgnoringModifiers,
+               let number = Int(chars),
+               (1...9).contains(number) {
+                model.commitAction(at: number - 1)
+                return nil
+            }
             switch event.keyCode {
             case 125: model.moveAction(1); return nil
             case 126: model.moveAction(-1); return nil
             case 36, 76: model.commitAction(); return nil
-            case 53: model.closeActions(); return nil
-            case 123: model.closeActions(); return nil
+            case 53, 123: model.backActions(); return nil
             default: model.closeActions()
             }
         }
@@ -441,7 +447,7 @@ struct LauncherRoot: View {
     private func actionRows(_ theme: LauncherTheme) -> some View {
         VStack(spacing: LauncherMetrics.rowGap) {
             ForEach(Array(model.launcherActions.enumerated()), id: \.element.id) { index, action in
-                LauncherActionRow(action: action, selected: index == model.actionIndex, theme: theme)
+                LauncherActionRow(action: action, index: index, selected: index == model.actionIndex, theme: theme)
                     .id(action.id)
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -487,15 +493,56 @@ struct LauncherRoot: View {
                     .padding(.horizontal, 14)
             } else {
                 ForEach(Array(model.results.enumerated()), id: \.element.id) { index, item in
-                    LauncherRow(item: item, index: index, selected: index == model.selection, theme: theme)
-                        .id(item.id)
-                        .contentShape(Rectangle())
-                        .onTapGesture { model.commitIndex(index) }
+                    resultRow(item, index: index, theme: theme)
                 }
             }
         }
         .animation(.none, value: model.selection)
         .animation(.none, value: model.results.map(\.id))
+    }
+
+    @ViewBuilder
+    private func resultRow(_ item: SearchResult, index: Int, theme: LauncherTheme) -> some View {
+        let row = LauncherRow(item: item, index: index, selected: index == model.selection, theme: theme)
+            .id(item.id)
+            .contentShape(Rectangle())
+            .onTapGesture { model.commitIndex(index) }
+        if item.kind == "app", item.payload.hasPrefix("/") {
+            row.contextMenu { appFileMenu(item) }
+        } else {
+            row
+        }
+    }
+
+    @ViewBuilder
+    private func appFileMenu(_ item: SearchResult) -> some View {
+        ForEach(FileActions.items(kind: item.kind, path: item.payload)) { action in
+            if action.id == .recentDocuments {
+                Menu(action.title) {
+                    recentDocumentMenu(item.payload)
+                }
+            } else {
+                Button(action.title) {
+                    model.perform(fileAction: action.id, on: item)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func recentDocumentMenu(_ path: String) -> some View {
+        let documents = RecentDocuments.urls(forAppAt: path)
+        if documents.isEmpty {
+            Button("No Recent Documents") {}
+                .disabled(true)
+        } else {
+            ForEach(documents) { document in
+                Button(document.name) {
+                    model.openFile(document.path)
+                }
+                .help(document.path)
+            }
+        }
     }
 }
 
@@ -657,8 +704,15 @@ struct LauncherRow: View {
 
 struct LauncherActionRow: View {
     var action: LauncherAction
+    var index: Int
     var selected: Bool
     var theme: LauncherTheme
+
+    private var shortcut: String {
+        if selected { return "↩" }
+        guard index < 9 else { return "" }
+        return "⌘\(index + 1)"
+    }
 
     var body: some View {
         HStack(spacing: theme.iconPadding + 4) {
@@ -677,7 +731,7 @@ struct LauncherActionRow: View {
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text(selected ? "↩" : "")
+            Text(shortcut)
                 .font(.system(size: theme.shortcutSize))
                 .foregroundStyle(selected ? theme.selectedSubtitle : theme.subtitle)
         }
