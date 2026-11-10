@@ -10,14 +10,14 @@ struct PreferencesShell: View {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(Color(hex: 0xECECEC))
+        .jfredWindowFill()
         .preferredColorScheme(.light)
         .background(WindowReader { window in
             window.identifier = NSUserInterfaceItemIdentifier("preferences")
             window.title = ""
             window.titleVisibility = .visible
-            window.titlebarAppearsTransparent = false
-            window.toolbarStyle = .unifiedCompact
+            window.titlebarAppearsTransparent = true
+            window.toolbarStyle = .unified
             window.titlebarSeparatorStyle = .none
             window.backgroundColor = NSColor(JfredColor.canvas)
             window.setContentSize(NSSize(width: 1180, height: 766))
@@ -32,19 +32,18 @@ struct PreferencesShell: View {
         })
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color(hex: 0x7A7A7A))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
                     TextField("Search Preferences", text: model.bind(\.prefsQuery))
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
                         .frame(width: 420)
                 }
-                .padding(.horizontal, 8)
-                .frame(height: 24)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0xE3E3E3)))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.black.opacity(0.10), lineWidth: 1))
+                .padding(.horizontal, 10)
+                .frame(height: 28)
+                .jfredGlass(cornerRadius: JfredMetrics.controlRadius)
             }
         }
         .onChange(of: model.preferences) { old, _ in model.preferencesChanged(from: old) }
@@ -85,10 +84,11 @@ struct IconRail: View {
                 railButton(section)
             }
         }
-        .padding(.bottom, 10)
-        .frame(width: 82)
+        .padding(.bottom, 12)
+        .padding(.top, 8)
+        .frame(width: 88)
         .frame(maxHeight: .infinity)
-        .jfredSidebar(tint: JfredColor.sidebar)
+        .jfredSystemSidebar()
         .layoutPriority(2)
     }
 
@@ -116,10 +116,13 @@ struct IconRail: View {
                     .font(.system(size: 11))
                     .lineLimit(1)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(model.section == section ? Color.accentColor : JfredColor.ink)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
-            .background(model.section == section ? Color.white.opacity(0.20) : Color.clear)
+            .background(
+                RoundedRectangle(cornerRadius: JfredMetrics.controlRadius, style: .continuous)
+                    .fill(model.section == section ? Color.accentColor.opacity(0.14) : Color.clear)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -170,7 +173,7 @@ struct GeneralPane: View {
                 .padding(.top, 44)
             Spacer(minLength: 0)
         }
-        .background(Color(hex: 0xECECEC))
+        .background(Color.clear)
     }
 
     private var form: some View {

@@ -8,6 +8,18 @@ private enum WorkflowCanvas {
     static let nodeHeight: CGFloat = 100
 }
 
+private enum WorkflowChrome {
+    static let canvas = Color(hex: 0xF3F3F5)
+    static let sidebar = Color(hex: 0xECECF0)
+    static let rail = Color(hex: 0xE6E6EA)
+    static let header = Color(hex: 0xEFEFF2)
+    static let well = Color(hex: 0xE0E0E5)
+    static let hairline = Color.black.opacity(0.10)
+    static let selectedRow = Color.accentColor.opacity(0.16)
+    static let primary = Color(hex: 0x1D1D1F)
+    static let secondary = Color(hex: 0x6E6E73)
+}
+
 private func artworkImage(from ref: WorkflowIconRef) -> NSImage? {
     switch ref {
     case .image(let path):
@@ -65,7 +77,7 @@ struct WorkflowsPane: View {
             }
         }
         .sheet(isPresented: model.bind(\.showTemplates)) { templateSheet }
-        .background(Color(hex: 0x1B1B1B))
+        .background(WorkflowChrome.canvas)
         .onDrop(of: [.fileURL], isTargeted: $dropTargeted, perform: handleWorkflowDrop)
         .overlay {
             if dropTargeted {
@@ -115,7 +127,7 @@ struct WorkflowsPane: View {
             if !model.workflowImportStatus.isEmpty {
                 Text(model.workflowImportStatus)
                     .font(.system(size: 10.5))
-                    .foregroundStyle(model.workflowImportStatus.hasPrefix("Could not") ? Color.orange : Color.white.opacity(0.85))
+                    .foregroundStyle(model.workflowImportStatus.hasPrefix("Could not") ? Color.orange : WorkflowChrome.primary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 4)
@@ -130,13 +142,13 @@ struct WorkflowsPane: View {
             }
             Spacer(minLength: 0)
             HStack(spacing: 2) {
-                Button("Alfred Gallery") {
+                Button("Browse Gallery") {
                     if let url = URL(string: "https://alfred.app/") { NSWorkspace.shared.open(url) }
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 11))
                 .frame(width: 104, height: 28)
-                .background(Color(hex: 0x3A3A3A))
+                .background(WorkflowChrome.well)
                 Button("Help") { model.section = .help }
                     .buttonStyle(.plain)
                     .font(.system(size: 11))
@@ -151,7 +163,7 @@ struct WorkflowsPane: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Import an Alfred Workflow")
+                .help("Import a workflow")
                 Menu {
                     Button("New Workflow") { model.beginWorkflowEdit(blank()) }
                     Button("New from Template…") { model.showTemplates = true }
@@ -174,14 +186,14 @@ struct WorkflowsPane: View {
                 .font(.system(size: 15, weight: .medium))
                 .frame(width: 24)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(WorkflowChrome.primary)
             .padding(.horizontal, 6)
             .frame(height: 28)
-            .background(Color(hex: 0x2A2A2A))
-            .overlay(alignment: .top) { Rectangle().fill(Color.white.opacity(0.12)).frame(height: 1) }
+            .background(WorkflowChrome.rail)
+            .overlay(alignment: .top) { Rectangle().fill(WorkflowChrome.hairline).frame(height: 1) }
         }
         .frame(width: 253)
-        .background(Color(hex: 0x2F104B))
+        .background(WorkflowChrome.sidebar)
     }
 
     private func workflowRow(_ workflow: Workflow) -> some View {
@@ -210,17 +222,17 @@ struct WorkflowsPane: View {
                         .lineLimit(1)
                     Text(workflow.isMissingBundle ? "Missing on disk" : (workflow.author.isEmpty ? "by You" : "by \(workflow.author)"))
                         .font(.system(size: 10.5))
-                        .foregroundStyle(workflow.isMissingBundle ? Color.orange.opacity(0.95) : Color.white.opacity(0.62))
+                        .foregroundStyle(workflow.isMissingBundle ? Color.orange.opacity(0.95) : WorkflowChrome.secondary)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 9)
             .frame(height: 42)
-            .foregroundStyle(.white)
+            .foregroundStyle(WorkflowChrome.primary)
             .opacity(workflow.enabled ? 1 : 0.55)
             .saturation(workflow.enabled ? 1 : 0.15)
-            .background(model.selectedWorkflow == workflow.id ? Color(hex: 0x4B809C) : Color.clear)
+            .background(model.selectedWorkflow == workflow.id ? WorkflowChrome.selectedRow : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -373,13 +385,13 @@ struct WorkflowsPane: View {
     private var emptyState: some View {
         ScrollView {
             VStack(spacing: 12) {
-                card("sparkles", "Alfred Gallery", "Browse community workflows, then import the .alfredworkflow file.") {
+                card("sparkles", "Browse Gallery", "Browse community workflows, then import a workflow package.") {
                     if let url = URL(string: "https://alfred.app/") { NSWorkspace.shared.open(url) }
                 }
                 card("book", "Getting Started Guide", "Learn how objects, connections and variables fit together.") { model.section = .help }
                 card("point.3.connected.trianglepath.dotted", "Create a Workflow", "Start with a Keyword and build a graph of actions.") { model.beginWorkflowEdit(blank()) }
                 card("square.on.square", "Create from a Template", "Start with a Script Filter, a web search or a shell action.") { model.showTemplates = true }
-                card("square.and.arrow.down", "Import an Alfred Workflow", "Choose a .alfredworkflow file, or drag one onto this pane.") { chooseWorkflowToImport() }
+                card("square.and.arrow.down", "Import a Workflow", "Choose a workflow package, or drag one onto this pane.") { chooseWorkflowToImport() }
             }
             .frame(maxWidth: 650)
             .padding(40)
@@ -393,17 +405,17 @@ struct WorkflowsPane: View {
                 Image(systemName: symbol)
                     .font(.system(size: 34, weight: .light))
                     .frame(width: 70)
-                    .foregroundStyle(.white.opacity(0.9))
+                    .foregroundStyle(Color.accentColor)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
-                    Text(text).font(.system(size: 12)).foregroundStyle(.white.opacity(0.5))
+                    Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(WorkflowChrome.primary)
+                    Text(text).font(.system(size: 12)).foregroundStyle(WorkflowChrome.secondary)
                 }
                 Spacer()
             }
             .padding(.horizontal, 18)
             .frame(height: 90)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: 0x2B2B2B)))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.06)))
+            .background(RoundedRectangle(cornerRadius: JfredMetrics.cardRadius, style: .continuous).fill(Color.white))
+            .overlay(RoundedRectangle(cornerRadius: JfredMetrics.cardRadius, style: .continuous).stroke(WorkflowChrome.hairline))
         }
         .buttonStyle(.plain)
     }
@@ -528,9 +540,8 @@ struct WorkflowEditor: View {
             if model.workflowPaletteVisible { objectPalette }
         }
         .frame(minWidth: 760, maxWidth: .infinity, minHeight: 520, maxHeight: .infinity)
-        .background(Color(hex: 0x1B1B1B))
-        .environment(\.colorScheme, .dark)
-        .onAppear {
+        .background(WorkflowChrome.canvas)
+                .onAppear {
             if model.selectedWorkflowObject == nil {
                 model.selectedWorkflowObject = workflow?.searchInputs.first?.id
             }
@@ -556,7 +567,7 @@ struct WorkflowEditor: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text((workflow?.name ?? "Workflow") + (workflow?.enabled == false ? " - disabled" : ""))
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(WorkflowChrome.primary)
                     .lineLimit(1)
                 HStack(spacing: 8) {
                     Button("Configure Workflow...") {
@@ -564,11 +575,11 @@ struct WorkflowEditor: View {
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(WorkflowChrome.primary)
                     .padding(.horizontal, 8)
                     .frame(height: 22)
                     .contentShape(Rectangle())
-                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.14)))
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.06)))
                     Text(workflow?.details.isEmpty == false ? workflow!.details : "Workflow \(workflow?.version ?? "")")
                         .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
@@ -596,7 +607,7 @@ struct WorkflowEditor: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14))
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(WorkflowChrome.secondary)
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
@@ -605,15 +616,15 @@ struct WorkflowEditor: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 90)
-        .background(Color(hex: 0x161616))
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.black.opacity(0.35)).frame(height: 1) }
+        .background(WorkflowChrome.header)
+        .overlay(alignment: .bottom) { Rectangle().fill(WorkflowChrome.hairline).frame(height: 1) }
     }
 
     private func headerButton(_ symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(WorkflowChrome.secondary)
                 .frame(width: 20, height: 20)
                 .contentShape(Rectangle())
         }
@@ -625,25 +636,25 @@ struct WorkflowEditor: View {
             HStack(spacing: 7) {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.65))
+                    .foregroundStyle(WorkflowChrome.secondary)
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
-                TextField("", text: model.bind(\.workflowPaletteFilter), prompt: Text("Search Objects").foregroundStyle(.white.opacity(0.45)))
+                TextField("", text: model.bind(\.workflowPaletteFilter), prompt: Text("Search Objects").foregroundStyle(WorkflowChrome.secondary))
                     .textFieldStyle(.plain)
                     .font(.system(size: 11))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(WorkflowChrome.primary)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.45))
+                    .foregroundStyle(WorkflowChrome.secondary)
                 Image(systemName: "chevron.up")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.45))
+                    .foregroundStyle(WorkflowChrome.secondary)
             }
             .padding(.horizontal, 10)
             .frame(height: 38)
-            .background(Color(hex: 0x3F3F3F))
-            .overlay(alignment: .bottom) { Rectangle().fill(Color.black.opacity(0.35)).frame(height: 1) }
+            .background(WorkflowChrome.rail)
+            .overlay(alignment: .bottom) { Rectangle().fill(WorkflowChrome.hairline).frame(height: 1) }
 
             Color.clear.frame(height: 52)
 
@@ -658,7 +669,7 @@ struct WorkflowEditor: View {
             }
         }
         .frame(width: 243)
-        .background(Color(hex: 0x282828))
+        .background(WorkflowChrome.sidebar)
     }
 
     private var paletteSections: [(String, [WorkflowObjectKind])] {
@@ -684,12 +695,12 @@ struct WorkflowEditor: View {
                 Spacer()
                 Image(systemName: symbol)
                     .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.35))
+                    .foregroundStyle(WorkflowChrome.secondary)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(WorkflowChrome.primary)
             .padding(.horizontal, 10)
             .frame(height: 27)
-            .background(Color(hex: 0x3F3F3F))
+            .background(WorkflowChrome.rail)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -713,14 +724,14 @@ struct WorkflowEditor: View {
                     Spacer()
                     Image(systemName: "rectangle.on.rectangle")
                         .font(.system(size: 9))
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(WorkflowChrome.secondary)
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(WorkflowChrome.primary)
                 .padding(.horizontal, 10)
                 .frame(height: 27)
                 .background(title == "Favourites"
-                    ? AnyShapeStyle(LinearGradient(colors: [Color(hex: 0x3D2F57), Color(hex: 0x384C5D)], startPoint: .leading, endPoint: .trailing))
-                    : AnyShapeStyle(Color(hex: 0x3F3F3F)))
+                    ? AnyShapeStyle(LinearGradient(colors: [Color.accentColor.opacity(0.16), Color.accentColor.opacity(0.07)], startPoint: .leading, endPoint: .trailing))
+                    : AnyShapeStyle(WorkflowChrome.rail))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -743,7 +754,7 @@ struct WorkflowEditor: View {
                     .foregroundStyle(Color(hex: 0x333333))
                     .frame(width: 22, height: 22)
                     .background(RoundedRectangle(cornerRadius: 4).fill(Color(hex: 0xE9E9E9)))
-                Text(kind.title).font(.system(size: 11, weight: .medium)).foregroundStyle(.white).lineLimit(1)
+                Text(kind.title).font(.system(size: 11, weight: .medium)).foregroundStyle(WorkflowChrome.primary).lineLimit(1)
                 Spacer(minLength: 2)
                 Image(systemName: paletteSections[0].1.contains(kind) ? "star.fill" : "star")
                     .font(.system(size: 9))
@@ -759,7 +770,7 @@ struct WorkflowEditor: View {
     private var canvas: some View {
         ScrollView([.horizontal, .vertical]) {
             ZStack(alignment: .topLeading) {
-                Color(hex: 0x1E1E1E)
+                WorkflowChrome.canvas
                     .onTapGesture { model.selectedWorkflowObject = nil }
                 ForEach(workflow?.connections ?? []) { connection in
                     connectionPath(connection)
@@ -777,7 +788,7 @@ struct WorkflowEditor: View {
             .frame(width: canvasSize.width, height: canvasSize.height)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(hex: 0x1E1E1E))
+        .background(WorkflowChrome.canvas)
     }
 
     private var canvasSize: CGSize {
@@ -856,7 +867,7 @@ struct WorkflowEditor: View {
                 if !note.isEmpty {
                     Text(note)
                         .font(.system(size: 8.5))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(WorkflowChrome.secondary)
                         .multilineTextAlignment(.center)
                         .lineLimit(4)
                         .padding(.horizontal, 7)
@@ -949,7 +960,7 @@ struct WorkflowEditor: View {
                 .font(.system(size: 8, weight: .medium))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 3)
-                .background(Capsule().fill(Color(hex: 0x1E1E1E)))
+                .background(Capsule().fill(WorkflowChrome.canvas))
                 .position(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 - 6)
         )
     }
@@ -1625,17 +1636,17 @@ struct WorkflowEditor: View {
                 HStack(spacing: 8) {
                     Image(systemName: "ladybug")
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(WorkflowChrome.secondary)
                     Text("Debugger")
                         .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
+                        .foregroundStyle(WorkflowChrome.primary)
                     TextField("Test query", text: model.bind(\.debugQuery))
                         .textFieldStyle(.plain)
                         .font(.system(size: 10.5))
                         .padding(.horizontal, 5)
                         .frame(width: 150, height: 20)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.09)))
-                        .foregroundStyle(.white)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.white))
+                        .foregroundStyle(WorkflowChrome.primary)
                     Button("Run") { model.runWorkflowDebug(workflowID) }
                         .buttonStyle(.plain)
                         .font(.system(size: 10.5))
@@ -1659,13 +1670,13 @@ struct WorkflowEditor: View {
                 }
                 .padding(.horizontal, 10)
                 .frame(height: 30)
-                .background(Color(hex: 0x2A2A2A))
+                .background(WorkflowChrome.rail)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(model.debugLines.enumerated()), id: \.offset) { _, line in
                             Text(line)
                                 .font(.system(size: 9.5, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.72))
+                                .foregroundStyle(WorkflowChrome.primary.opacity(0.85))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
@@ -1673,9 +1684,9 @@ struct WorkflowEditor: View {
                     .padding(.vertical, 5)
                 }
                 .frame(height: 76)
-                .background(Color(hex: 0x171717))
+                .background(WorkflowChrome.well)
             }
-            .overlay(alignment: .top) { Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1) }
+            .overlay(alignment: .top) { Rectangle().fill(WorkflowChrome.hairline).frame(height: 1) }
         } else {
             Button {
                 model.debuggerVisible = true
@@ -1692,8 +1703,8 @@ struct WorkflowEditor: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 10)
                 .frame(height: 28)
-                .background(Color(hex: 0x2A2A2A))
-                .overlay(alignment: .top) { Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1) }
+                .background(WorkflowChrome.rail)
+                .overlay(alignment: .top) { Rectangle().fill(WorkflowChrome.hairline).frame(height: 1) }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

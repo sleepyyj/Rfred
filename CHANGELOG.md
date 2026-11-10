@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0
+
+### Appearance
+
+The launcher and Preferences are redrawn for the current macOS design language. On macOS 26 and later the launcher uses the system glass material, larger window corners, a refined search field, and softer result-row highlights. Earlier systems keep the previous material or flat look.
+
+A new System theme follows light and dark appearance and is the default for new setups. Glassy Light, Glassy Dark, Flat Light, and Flat Dark sit alongside the existing built-in themes. A theme already saved in your settings is left as it is.
+
+Preferences use a unified toolbar, a translucent sidebar, and consistent system symbols. The workflow editor now uses the same light chrome as the rest of Preferences. Large Type and the clipboard preview pane follow the same corner and material language. Behaviour is unchanged: the launcher hotkey, theme editor, and workflow canvas keep working as before.
+
 ## 1.0.0
 
 ### Jfred 1.0

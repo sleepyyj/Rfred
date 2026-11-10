@@ -14,7 +14,7 @@ struct JfredApp: App {
                 .frame(minWidth: 1180, minHeight: 700)
         }
         .defaultSize(width: 1422, height: 860)
-        .windowToolbarStyle(.unifiedCompact)
+        .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .appTermination) {

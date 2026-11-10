@@ -307,7 +307,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         fallbackMode = "none"
         webSearches = WebSearch.defaults
         urlHistory = []
-        themeID = "alfred"
+        themeID = "system"
         customThemes = []
         storeTypedQuery = true
         showLatestQuery = false

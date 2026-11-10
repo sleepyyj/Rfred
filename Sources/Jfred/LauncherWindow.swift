@@ -457,11 +457,11 @@ final class LauncherController {
 
 struct LauncherRoot: View {
     var model: AppModel
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
+        let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes, colorScheme: colorScheme)
         let searching = !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let panel = RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
             QueryField(
                 text: model.query,
@@ -470,9 +470,9 @@ struct LauncherRoot: View {
                 color: NSColor(theme.query),
                 onChange: { model.query = $0 }
             )
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 10)
             .frame(height: theme.queryBoxHeight)
-            .background { LauncherFieldBackground(color: theme.searchBackground) }
+            .background { LauncherFieldBackground(color: theme.searchBackground, radius: theme.fieldRadius) }
             .padding(.horizontal, theme.paddingH)
             .padding(.top, theme.paddingV)
             .padding(.bottom, searching ? 6 : theme.paddingV)
@@ -506,20 +506,7 @@ struct LauncherRoot: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background {
-            panel
-                .fill(theme.background)
-                .background {
-                    if theme.blur > 0 {
-                        panel.fill(.ultraThinMaterial)
-                    }
-                }
-        }
-        .clipShape(panel)
-        .overlay(
-            panel.strokeBorder(theme.border, lineWidth: 0.7)
-        )
-        .shadow(color: .black.opacity(0.26), radius: 24, y: 12)
+        .jfredLauncherSurface(theme: theme)
         .onChange(of: model.query) { _, _ in
             model.closeActions()
             model.scheduleSearch()
@@ -766,14 +753,15 @@ enum LauncherMetrics {
     }
 }
 
-/// Alfred-style field: a flat, slightly recessed rounded rectangle that sits
+/// Search field: a slightly recessed rounded rectangle that sits
 /// inside the panel, rather than a bright capsule floating over it. Because
 /// the panel is always drawn, the field has the same backdrop and colour in
 /// the empty and expanded states.
 struct LauncherFieldBackground: View {
     var color: Color = Color.black.opacity(0.10)
+    var radius: CGFloat = 4
     var body: some View {
-        RoundedRectangle(cornerRadius: 4, style: .continuous)
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
             .fill(color)
     }
 }
@@ -840,7 +828,7 @@ struct LauncherRow: View {
         .padding(.horizontal, theme.paddingH)
         .frame(maxWidth: .infinity, minHeight: theme.rowHeight, maxHeight: theme.rowHeight, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
+            RoundedRectangle(cornerRadius: theme.rowHighlightRadius, style: .continuous)
                 .fill(selected ? theme.selected : Color.clear)
         )
     }
@@ -882,7 +870,7 @@ struct LauncherActionRow: View {
         .padding(.horizontal, theme.paddingH)
         .frame(maxWidth: .infinity, minHeight: theme.rowHeight, maxHeight: theme.rowHeight, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
+            RoundedRectangle(cornerRadius: theme.rowHighlightRadius, style: .continuous)
                 .fill(selected ? theme.selected : Color.clear)
         )
     }
@@ -909,14 +897,22 @@ struct LargeTypeView: View {
                 .padding(.vertical, fitBackground ? 44 : 48)
                 .background {
                     if fitBackground {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(Color.black.opacity(0.60))
+                        largeTypeBackdrop
                     }
                 }
                 .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
         }
         .onTapGesture { dismiss() }
         .onExitCommand { dismiss() }
+    }
+
+    @ViewBuilder private var largeTypeBackdrop: some View {
+        let shape = RoundedRectangle(cornerRadius: JfredMetrics.windowRadius, style: .continuous)
+        if #available(macOS 26.0, *) {
+            shape.fill(Color.black.opacity(0.28)).glassEffect(.regular.tint(Color.black.opacity(0.45)), in: shape)
+        } else {
+            shape.fill(Color.black.opacity(0.60))
+        }
     }
 }
 
@@ -936,10 +932,10 @@ struct PreviewLauncher: View {
             Text("Co")
                 .font(theme.queryFont)
                 .foregroundStyle(theme.query)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: theme.queryBoxHeight)
-                .background { LauncherFieldBackground(color: theme.searchBackground) }
+                .background { LauncherFieldBackground(color: theme.searchBackground, radius: theme.fieldRadius) }
                 .padding(.horizontal, theme.paddingH)
                 .padding(.top, theme.paddingV)
                 .padding(.bottom, 6)
@@ -961,29 +957,14 @@ struct PreviewLauncher: View {
                     }
                     .padding(.horizontal, theme.paddingH)
                     .frame(height: theme.rowHeight)
-                    .background(RoundedRectangle(cornerRadius: theme.radius).fill(index == 0 ? theme.selected : Color.clear))
+                    .background(RoundedRectangle(cornerRadius: theme.rowHighlightRadius, style: .continuous).fill(index == 0 ? theme.selected : Color.clear))
                 }
             }
             .padding(.horizontal, theme.paddingH)
             .padding(.bottom, theme.paddingV)
         }
         .frame(width: theme.width)
-        .background {
-            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
-                .fill(theme.background)
-                .background {
-                    if theme.material != nil {
-                        RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
-                            .fill(theme.material ?? .ultraThin)
-                    }
-                }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: theme.radius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: theme.radius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
-        )
-        .shadow(color: .black.opacity(0.26), radius: 24, y: 12)
+        .jfredLauncherSurface(theme: theme)
     }
 }
 

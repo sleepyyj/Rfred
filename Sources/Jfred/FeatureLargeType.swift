@@ -16,7 +16,7 @@ extension FeaturesPane {
             }
             ZStack {
                 WallpaperArt()
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: JfredMetrics.windowRadius, style: .continuous)
                     .fill(Color.black.opacity(0.38))
                     .frame(width: 620, height: 220)
                 Text("Jfred")
@@ -24,7 +24,7 @@ extension FeaturesPane {
                     .foregroundStyle(.white)
             }
             .frame(height: 260)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: JfredMetrics.cardRadius, style: .continuous))
             HStack(spacing: 24) {
                 Toggle("Auto Hide Jfred when showing Large Type", isOn: model.bindPref(\.largeTypeAutoHide))
                     .toggleStyle(.checkbox)

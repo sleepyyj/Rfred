@@ -5,16 +5,17 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum JfredColor {
-    /// Alfred-style two-level purple sidebar: a lighter rail, a deep list.
+    /// Legacy purple rail, kept for any remaining deep lists.
     static let sidebar = Color(hex: 0x4F217A)
     static let sidebarDeep = Color(hex: 0x2F104B)
     static let sidebarSelected = Color(hex: 0x3A1465)
     static let sidebarRowSelected = Color(hex: 0x583F70)
-    static let canvas = Color(hex: 0xEDEDEC)
-    static let ink = Color(hex: 0x303030)
-    static let sub = Color(hex: 0x6E6E6E)
+    static let canvas = Color(hex: 0xF3F3F5)
+    static let prefsRail = Color(hex: 0xE8E8ED)
+    static let ink = Color(hex: 0x1D1D1F)
+    static let sub = Color(hex: 0x6E6E73)
     static let hotkey = Color(hex: 0x8E2BB8)
-    static let line = Color.black.opacity(0.12)
+    static let line = Color.black.opacity(0.10)
 }
 
 extension Color {
@@ -58,6 +59,12 @@ struct LauncherTheme: Identifiable {
     var border: Color = Color.black.opacity(0.50)
     var blur: Double = 15
     var searchWeight: Font.Weight = .regular
+    var usesGlass: Bool = false
+    var highlightRadius: CGFloat? = nil
+    var searchFieldRadius: CGFloat? = nil
+
+    var rowHighlightRadius: CGFloat { highlightRadius ?? min(max(radius, 4), 8) }
+    var fieldRadius: CGFloat { searchFieldRadius ?? min(max(radius, 4), 8) }
 
     func font(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         if let fontName {
@@ -73,14 +80,14 @@ struct LauncherTheme: Identifiable {
         return NSFont.systemFont(ofSize: querySize, weight: searchWeight == .light ? .light : .regular)
     }
 
-    /// Alfred lays a row out as max(icon, text block) + vertical padding.
+    /// A result row is laid out as max(icon, text block) + vertical padding.
     var rowHeight: CGFloat {
         max(iconSize, resultTextSize + textSpacing + resultSubtextSize) + rowPaddingV * 2 + 4
     }
 
     var queryBoxHeight: CGFloat { querySize + 16 }
 
-    init(id: String, name: String, detail: String, query: Color, title: Color, subtitle: Color, selected: Color, selectedTitle: Color, selectedSubtitle: Color, background: Color, material: Material?, radius: CGFloat, querySize: CGFloat, fontName: String?, width: CGFloat = 559, paddingH: CGFloat = 9, paddingV: CGFloat = 8, iconSize: CGFloat = 40, iconPadding: CGFloat = 4, rowPaddingV: CGFloat = 3, textSpacing: CGFloat = 5, resultTextSize: CGFloat = 18, resultSubtextSize: CGFloat = 12, shortcutSize: CGFloat = 16, searchBackground: Color = Color.black.opacity(0.10), searchSelected: Color = Color(hex: 0x480069), border: Color = Color.black.opacity(0.50), blur: Double = 15, searchWeight: Font.Weight = .regular) {
+    init(id: String, name: String, detail: String, query: Color, title: Color, subtitle: Color, selected: Color, selectedTitle: Color, selectedSubtitle: Color, background: Color, material: Material?, radius: CGFloat, querySize: CGFloat, fontName: String?, width: CGFloat = 559, paddingH: CGFloat = 9, paddingV: CGFloat = 8, iconSize: CGFloat = 40, iconPadding: CGFloat = 4, rowPaddingV: CGFloat = 3, textSpacing: CGFloat = 5, resultTextSize: CGFloat = 18, resultSubtextSize: CGFloat = 12, shortcutSize: CGFloat = 16, searchBackground: Color = Color.black.opacity(0.10), searchSelected: Color = Color(hex: 0x480069), border: Color = Color.black.opacity(0.50), blur: Double = 15, searchWeight: Font.Weight = .regular, usesGlass: Bool = false, highlightRadius: CGFloat? = nil, searchFieldRadius: CGFloat? = nil) {
         self.id = id
         self.name = name
         self.detail = detail
@@ -110,6 +117,9 @@ struct LauncherTheme: Identifiable {
         self.border = border
         self.blur = blur
         self.searchWeight = searchWeight
+        self.usesGlass = usesGlass
+        self.highlightRadius = highlightRadius
+        self.searchFieldRadius = searchFieldRadius
     }
 
     init(custom: CustomTheme) {
@@ -149,9 +159,71 @@ struct LauncherTheme: Identifiable {
         )
     }
 
+    static let systemLight = LauncherTheme(
+        id: "system-light", name: "Glassy Light", detail: "Built-in Theme",
+        query: Color(rgba: 0x1D1D1FFF), title: Color(rgba: 0x1D1D1FF0), subtitle: Color(rgba: 0x3C3C4399),
+        selected: Color(nsColor: .controlAccentColor), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.82),
+        background: Color(rgba: 0xFFFFFFF0).opacity(0.58), material: .regular, radius: 26, querySize: 28,
+        fontName: nil, width: 640, paddingH: 12, paddingV: 12, iconSize: 42,
+        iconPadding: 8, rowPaddingV: 4, textSpacing: 3, resultTextSize: 17,
+        resultSubtextSize: 12, shortcutSize: 13, searchBackground: Color.black.opacity(0.06),
+        searchSelected: Color(nsColor: .controlAccentColor), border: Color.white.opacity(0.42), blur: 28,
+        searchWeight: .regular, usesGlass: true, highlightRadius: 10, searchFieldRadius: 12
+    )
+
+    static let systemDark = LauncherTheme(
+        id: "system-dark", name: "Glassy Dark", detail: "Built-in Theme",
+        query: Color(rgba: 0xF5F5F7FF), title: Color(rgba: 0xF5F5F7F0), subtitle: Color(rgba: 0xEBEBF599),
+        selected: Color(nsColor: .controlAccentColor), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.82),
+        background: Color(rgba: 0x1C1C1EF0).opacity(0.52), material: .regular, radius: 26, querySize: 28,
+        fontName: nil, width: 640, paddingH: 12, paddingV: 12, iconSize: 42,
+        iconPadding: 8, rowPaddingV: 4, textSpacing: 3, resultTextSize: 17,
+        resultSubtextSize: 12, shortcutSize: 13, searchBackground: Color.white.opacity(0.08),
+        searchSelected: Color(nsColor: .controlAccentColor), border: Color.white.opacity(0.22), blur: 28,
+        searchWeight: .regular, usesGlass: true, highlightRadius: 10, searchFieldRadius: 12
+    )
+
+    static let systemFlatLight = LauncherTheme(
+        id: "system-flat-light", name: "Flat Light", detail: "Built-in Theme",
+        query: Color(rgba: 0x1D1D1FFF), title: Color(rgba: 0x1D1D1FF0), subtitle: Color(rgba: 0x3C3C4399),
+        selected: Color(nsColor: .controlAccentColor), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.82),
+        background: Color(rgba: 0xF5F5F7F5), material: nil, radius: 26, querySize: 28,
+        fontName: nil, width: 640, paddingH: 12, paddingV: 12, iconSize: 42,
+        iconPadding: 8, rowPaddingV: 4, textSpacing: 3, resultTextSize: 17,
+        resultSubtextSize: 12, shortcutSize: 13, searchBackground: Color.black.opacity(0.06),
+        searchSelected: Color(nsColor: .controlAccentColor), border: Color.black.opacity(0.10), blur: 0,
+        searchWeight: .regular, usesGlass: false, highlightRadius: 10, searchFieldRadius: 12
+    )
+
+    static let systemFlatDark = LauncherTheme(
+        id: "system-flat-dark", name: "Flat Dark", detail: "Built-in Theme",
+        query: Color(rgba: 0xF5F5F7FF), title: Color(rgba: 0xF5F5F7F0), subtitle: Color(rgba: 0xEBEBF599),
+        selected: Color(nsColor: .controlAccentColor), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.82),
+        background: Color(rgba: 0x1C1C1EF5), material: nil, radius: 26, querySize: 28,
+        fontName: nil, width: 640, paddingH: 12, paddingV: 12, iconSize: 42,
+        iconPadding: 8, rowPaddingV: 4, textSpacing: 3, resultTextSize: 17,
+        resultSubtextSize: 12, shortcutSize: 13, searchBackground: Color.white.opacity(0.08),
+        searchSelected: Color(nsColor: .controlAccentColor), border: Color.white.opacity(0.12), blur: 0,
+        searchWeight: .regular, usesGlass: false, highlightRadius: 10, searchFieldRadius: 12
+    )
+
+    /// Picker entry for the auto appearance theme. `by(id:)` resolves the colours.
+    static let systemAuto = LauncherTheme(
+        id: "system", name: "System", detail: "Follows light and dark appearance",
+        query: Color(rgba: 0x1D1D1FFF), title: Color(rgba: 0x1D1D1FF0), subtitle: Color(rgba: 0x3C3C4399),
+        selected: Color(nsColor: .controlAccentColor), selectedTitle: .white, selectedSubtitle: Color.white.opacity(0.82),
+        background: Color(rgba: 0xFFFFFFF0).opacity(0.58), material: .regular, radius: 26, querySize: 28,
+        fontName: nil, width: 640, paddingH: 12, paddingV: 12, iconSize: 42,
+        iconPadding: 8, rowPaddingV: 4, textSpacing: 3, resultTextSize: 17,
+        resultSubtextSize: 12, shortcutSize: 13, searchBackground: Color.black.opacity(0.06),
+        searchSelected: Color(nsColor: .controlAccentColor), border: Color.white.opacity(0.42), blur: 28,
+        searchWeight: .regular, usesGlass: true, highlightRadius: 10, searchFieldRadius: 12
+    )
+
     static let all: [LauncherTheme] = [
+        systemAuto, systemLight, systemDark, systemFlatLight, systemFlatDark,
         LauncherTheme(
-            id: "alfred", name: "Alfred", detail: "Alfred Default Theme",
+            id: "alfred", name: "Classic Light", detail: "Built-in Theme",
             query: Color(rgba: 0x000000FF), title: Color(rgba: 0x000000E5), subtitle: Color(rgba: 0x00000065),
             selected: Color(rgba: 0x480069E4), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFC4),
             background: Color(rgba: 0xFFFFFFDB), material: .regular, radius: 3, querySize: 34,
@@ -162,7 +234,7 @@ struct LauncherTheme: Identifiable {
             searchWeight: .light
         ),
         LauncherTheme(
-            id: "alfred-dark", name: "Alfred Dark", detail: "Alfred Default Theme",
+            id: "alfred-dark", name: "Classic Dark", detail: "Built-in Theme",
             query: .white, title: Color(rgba: 0xFFFFFFCB), subtitle: Color(rgba: 0xFFFFFF7E),
             selected: Color(rgba: 0x358188FF), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFCB),
             background: Color(rgba: 0x000000C6), material: .regular, radius: 3, querySize: 34,
@@ -173,7 +245,7 @@ struct LauncherTheme: Identifiable {
             searchWeight: .light
         ),
         LauncherTheme(
-            id: "alfred-modern", name: "Alfred Modern", detail: "Alfred Default Theme",
+            id: "alfred-modern", name: "Modern Light", detail: "Built-in Theme",
             query: Color(rgba: 0x000000FF), title: Color(rgba: 0x000000E4), subtitle: Color(rgba: 0x00000098),
             selected: Color(rgba: 0x480069E4), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFCB),
             background: Color(rgba: 0xF8F8F86B), material: nil, radius: 15, querySize: 36,
@@ -184,7 +256,7 @@ struct LauncherTheme: Identifiable {
             searchWeight: .light
         ),
         LauncherTheme(
-            id: "alfred-modern-dark", name: "Alfred Modern Dark", detail: "Alfred Default Theme",
+            id: "alfred-modern-dark", name: "Modern Dark", detail: "Built-in Theme",
             query: .white, title: Color(rgba: 0xFFFFFFCB), subtitle: Color(rgba: 0xFFFFFF7E),
             selected: Color(rgba: 0x358188FF), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFCB),
             background: Color(rgba: 0x00000066), material: nil, radius: 15, querySize: 36,
@@ -195,7 +267,7 @@ struct LauncherTheme: Identifiable {
             searchWeight: .light
         ),
         LauncherTheme(
-            id: "alfred-classic", name: "Alfred Classic", detail: "Alfred Default Theme",
+            id: "alfred-classic", name: "Classic Compact", detail: "Built-in Theme",
             query: Color(rgba: 0x000000FF), title: Color(rgba: 0x000000E5), subtitle: Color(rgba: 0x00000065),
             selected: Color(rgba: 0x480069E4), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFC4),
             background: Color(rgba: 0xFFFFFFF2), material: nil, radius: 3, querySize: 30,
@@ -206,7 +278,7 @@ struct LauncherTheme: Identifiable {
             searchWeight: .regular
         ),
         LauncherTheme(
-            id: "alfred-macos", name: "Alfred macOS", detail: "Alfred Default Theme",
+            id: "alfred-macos", name: "macOS Light", detail: "Built-in Theme",
             query: Color(rgba: 0x000000FF), title: Color(rgba: 0x000000E5), subtitle: Color(rgba: 0x00000065),
             selected: Color(rgba: 0x016BDEFF), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFC4),
             background: Color(rgba: 0xFFFFFFE5), material: .regular, radius: 3, querySize: 34,
@@ -217,7 +289,7 @@ struct LauncherTheme: Identifiable {
             searchWeight: .light
         ),
         LauncherTheme(
-            id: "alfred-macos-dark", name: "Alfred macOS Dark", detail: "Alfred Default Theme",
+            id: "alfred-macos-dark", name: "macOS Dark", detail: "Built-in Theme",
             query: .white, title: Color(rgba: 0xFFFFFFD8), subtitle: Color(rgba: 0xFFFFFF66),
             selected: Color(rgba: 0x016BDEFF), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFCC),
             background: Color(rgba: 0x000000D8), material: .regular, radius: 3, querySize: 34,
@@ -228,7 +300,7 @@ struct LauncherTheme: Identifiable {
             searchWeight: .light
         ),
         LauncherTheme(
-            id: "frosty-teal", name: "Frosty Teal", detail: "Alfred Default Theme",
+            id: "frosty-teal", name: "Frosty Teal", detail: "Built-in Theme",
             query: .white, title: Color(rgba: 0xFFFFFFAD), subtitle: Color(rgba: 0xFFFFFF6F),
             selected: Color(rgba: 0x0000001F), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFA7),
             background: Color(rgba: 0x106480B4), material: .regular, radius: 3, querySize: 40,
@@ -239,7 +311,7 @@ struct LauncherTheme: Identifiable {
             searchWeight: .light
         ),
         LauncherTheme(
-            id: "large-avenir", name: "Large Avenir", detail: "Alfred Default Theme",
+            id: "large-avenir", name: "Large Avenir", detail: "Built-in Theme",
             query: .white, title: Color(rgba: 0xFFFFFFDB), subtitle: Color(rgba: 0xFFFFFF7F),
             selected: Color(rgba: 0x1D6488FF), selectedTitle: Color(rgba: 0xFFFFFFE8), selectedSubtitle: Color(rgba: 0xFFFFFFCB),
             background: Color(rgba: 0x272727F1), material: .regular, radius: 5, querySize: 46,
@@ -250,7 +322,7 @@ struct LauncherTheme: Identifiable {
             searchWeight: .regular
         ),
         LauncherTheme(
-            id: "high-contrast", name: "High Contrast Light", detail: "Alfred Default Theme",
+            id: "high-contrast", name: "High Contrast Light", detail: "Built-in Theme",
             query: .black, title: Color(rgba: 0x000000E5), subtitle: Color(rgba: 0x000000B6),
             selected: Color(rgba: 0x000000DA), selectedTitle: .white, selectedSubtitle: Color(rgba: 0xFFFFFFD9),
             background: Color(rgba: 0xFFFFFFFF), material: nil, radius: 2, querySize: 38,
@@ -262,9 +334,19 @@ struct LauncherTheme: Identifiable {
         ),
     ]
 
-    static func by(id: String, custom: [CustomTheme] = []) -> LauncherTheme {
+    @MainActor static func isDarkAppearance(_ scheme: ColorScheme? = nil) -> Bool {
+        if let scheme { return scheme == .dark }
+        return NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    }
+
+    /// Resolves a stored theme id. `"system"` and `"default"` follow the
+    /// current appearance. A stored `"alfred"` id is left as the classic theme.
+    @MainActor static func by(id: String, custom: [CustomTheme] = [], colorScheme: ColorScheme? = nil) -> LauncherTheme {
         if let custom = custom.first(where: { $0.id == id }) {
             return LauncherTheme(custom: custom)
+        }
+        if id == "system" || id == "default" {
+            return isDarkAppearance(colorScheme) ? systemDark : systemLight
         }
         let legacy = [
             "jfred": "alfred", "jfred-dark": "alfred-dark", "modern": "alfred-modern",
@@ -273,7 +355,7 @@ struct LauncherTheme: Identifiable {
             "frosty": "frosty-teal", "avenir": "large-avenir", "contrast": "high-contrast",
         ]
         let resolved = legacy[id] ?? id
-        return all.first { $0.id == resolved } ?? all[0]
+        return all.first { $0.id == resolved } ?? systemLight
     }
 }
 
@@ -433,7 +515,7 @@ struct WindowReader: NSViewRepresentable {
             onResolve?(window)
             // SwiftUI applies the expanded preference toolbar after this view attaches.
             DispatchQueue.main.async { [weak window] in
-                window?.toolbarStyle = .unifiedCompact
+                window?.toolbarStyle = .unified
             }
         }
     }

@@ -38,9 +38,13 @@ struct ClipboardPreviewPane: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(
+            RoundedRectangle(cornerRadius: theme.rowHighlightRadius, style: .continuous)
+                .fill(theme.searchBackground.opacity(0.55))
+        )
     }
 
     @ViewBuilder

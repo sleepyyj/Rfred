@@ -2737,7 +2737,7 @@ enum PreferenceIndex {
             PreferenceHit(id: "learning", title: "Top Result Keyword Latching", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "sync", title: "Syncing folder", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "usage", title: "Usage", detail: "Stats", section: .usage, feature: nil),
-            PreferenceHit(id: "theme", title: "Appearance themes", detail: "Alfred themes, custom themes and live preview", section: .appearance, feature: nil),
+            PreferenceHit(id: "theme", title: "Appearance themes", detail: "Built-in themes, custom themes and live preview", section: .appearance, feature: nil),
             PreferenceHit(id: "theme-files", title: "Import or export themes", detail: "Appearance .alfredappearance files", section: .appearance, feature: nil),
             PreferenceHit(id: "clipboard-ignore", title: "Clipboard Ignore Apps", detail: "Privacy and excluded applications", section: .features, feature: .clipboard),
             PreferenceHit(id: "snippet-expansion", title: "Auto Expansion Options", detail: "Snippets, sound and clipboard restore", section: .features, feature: .snippets),

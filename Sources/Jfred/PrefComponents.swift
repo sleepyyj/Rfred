@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Alfred's segmented tab strip, used at the top of feature pages.
+/// Segmented tab strip used at the top of feature pages.
 struct SettingsTabBar: View {
     @Binding var selection: String
     var tabs: [String]
@@ -17,7 +17,7 @@ struct SettingsTabBar: View {
                         .padding(.horizontal, 15)
                         .frame(height: 23)
                         .background(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .fill(selection == tab ? Color.white : Color.clear)
                         )
                 }
@@ -27,30 +27,29 @@ struct SettingsTabBar: View {
         .padding(2)
         .fixedSize()
         .background(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(Color(hex: 0xE2E1E0))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(hex: 0xE2E1E0).opacity(0.9))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .stroke(Color.black.opacity(0.09), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
         )
     }
 }
 
-/// Flat white rounded table / list card, matching Alfred's content panels.
+/// Rounded table / list card used in preference pages.
 struct SettingsCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: JfredMetrics.cardRadius, style: .continuous)
         content()
-            .background(Color.white)
-            .clipShape(shape)
-            .overlay(shape.stroke(Color.black.opacity(0.10), lineWidth: 1))
+            .background(.regularMaterial, in: shape)
+            .overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 1))
     }
 }
 
-/// Light inset panel that groups a table and its toolbar, as on Alfred's pages.
+/// Light inset panel that groups a table and its toolbar.
 struct SettingsPanel<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
@@ -58,12 +57,12 @@ struct SettingsPanel<Content: View>: View {
         content()
             .padding(12)
             .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(Color(hex: 0xF2F2F2))
+                RoundedRectangle(cornerRadius: JfredMetrics.cardRadius, style: .continuous)
+                    .fill(Color(hex: 0xF2F2F2).opacity(0.86))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(Color.black.opacity(0.07), lineWidth: 1)
+                RoundedRectangle(cornerRadius: JfredMetrics.cardRadius, style: .continuous)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
             )
     }
 }
@@ -84,18 +83,18 @@ struct SettingsFilterField: View {
                 .font(.system(size: 13))
         }
         .padding(.horizontal, 9)
-        .frame(width: width, height: 26)
+        .frame(width: width, height: 28)
         .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.white)
+            RoundedRectangle(cornerRadius: JfredMetrics.controlRadius, style: .continuous).fill(Color.white)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(Color.black.opacity(0.12), lineWidth: 1)
+            RoundedRectangle(cornerRadius: JfredMetrics.controlRadius, style: .continuous)
+                .stroke(Color.black.opacity(0.10), lineWidth: 1)
         )
     }
 }
 
-/// Right-aligned form label + controls on Alfred's 120pt label grid.
+/// Right-aligned form label + controls on a 120pt label grid.
 struct SettingsLabeled<Content: View>: View {
     var title: String
     @ViewBuilder var content: () -> Content
@@ -112,7 +111,7 @@ struct SettingsLabeled<Content: View>: View {
     }
 }
 
-/// Alfred's small grey explanation text, aligned with the control column.
+/// Small grey explanation text, aligned with the control column.
 struct SettingsNote: View {
     var text: String
 
@@ -138,7 +137,7 @@ struct PageHeaderBand: View {
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .fill(tint)
                 Image(systemName: icon)
                     .font(.system(size: 24, weight: .regular))
@@ -164,20 +163,20 @@ struct PageHeaderBand: View {
                         .foregroundStyle(Color(hex: 0x8A8A8A))
                 }
                 .buttonStyle(.plain)
-                .help("Open Alfred's help for this page")
+                .help("Open help for this page")
             }
         }
         .padding(.horizontal, 24)
         .frame(height: 80)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(hex: 0xD9D9D9))
+        .background(.ultraThinMaterial)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.black.opacity(0.10)).frame(height: 1)
+            Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
         }
     }
 }
 
-/// Flat preferences canvas. Alfred does not use translucency here.
+/// Preferences page canvas.
 struct PageSurface<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
@@ -188,7 +187,7 @@ struct PageSurface<Content: View>: View {
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(Color(hex: 0xECECEC))
+        .background(Color.clear)
     }
 }
 
@@ -197,11 +196,11 @@ struct FormPanel<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: JfredMetrics.cardRadius, style: .continuous)
         content()
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(shape.fill(Color.white))
-            .overlay(shape.stroke(Color.black.opacity(0.07), lineWidth: 1))
+            .background(shape.fill(Color.white.opacity(0.92)))
+            .overlay(shape.stroke(Color.black.opacity(0.06), lineWidth: 1))
     }
 }

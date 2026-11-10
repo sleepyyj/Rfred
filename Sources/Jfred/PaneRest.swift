@@ -18,19 +18,22 @@ struct AppearancePane: View {
                             model.preferences.themeID = theme.id
                         } label: {
                             HStack(spacing: 10) {
-                                ThemeThumbnail(theme: theme)
+                                ThemeThumbnail(theme: theme.id == "system" ? LauncherTheme.by(id: "system") : theme)
                                     .frame(width: 80, height: 50)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(theme.name).font(.system(size: 13, weight: .semibold))
-                                    Text(theme.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.75))
+                                    Text(theme.detail).font(.system(size: 11)).foregroundStyle(JfredColor.sub)
                                 }
                                 Spacer()
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 2)
                             .frame(height: 54)
-                            .foregroundStyle(.white)
-                            .background(model.preferences.themeID == theme.id ? Color.white.opacity(0.22) : Color.clear)
+                            .foregroundStyle(JfredColor.ink)
+                            .background(
+                                RoundedRectangle(cornerRadius: JfredMetrics.controlRadius, style: .continuous)
+                                    .fill(model.preferences.themeID == theme.id ? Color.accentColor.opacity(0.14) : Color.clear)
+                            )
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -38,7 +41,7 @@ struct AppearancePane: View {
                 }
             }
             .frame(width: 290)
-            .jfredSidebar(tint: JfredColor.sidebarDeep)
+            .jfredSystemSidebar()
             ZStack(alignment: .bottom) {
                 WallpaperArt()
                 PreviewLauncher(theme: LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes))
@@ -97,7 +100,7 @@ struct AppearancePane: View {
     private func removeTheme() {
         guard model.preferences.customThemes.contains(where: { $0.id == model.preferences.themeID }) else { return }
         model.preferences.customThemes.removeAll { $0.id == model.preferences.themeID }
-        model.preferences.themeID = "alfred"
+        model.preferences.themeID = "system"
     }
 }
 
@@ -145,7 +148,7 @@ struct ThemeEditorSheet: View {
                         HStack {
                             Button("Delete Theme", role: .destructive) {
                                 model.preferences.customThemes.remove(at: index)
-                                model.preferences.themeID = "alfred"
+                                model.preferences.themeID = "system"
                                 model.showThemeEditor = false
                             }
                             Spacer()
