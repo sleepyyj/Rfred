@@ -37,14 +37,17 @@ private func objectIconImage(_ object: WorkflowObject, workflow: Workflow?) -> N
 struct WorkflowsPane: View {
     var model: AppModel
 
+    @State private var dropTargeted = false
+
     private var visible: [Workflow] {
         let query = model.workflowFilter.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return model.workflows }
-        return model.workflows.filter {
-            $0.name.localizedCaseInsensitiveContains(query)
-                || $0.keyword.localizedCaseInsensitiveContains(query)
-                || $0.author.localizedCaseInsensitiveContains(query)
-                || $0.bundleID.localizedCaseInsensitiveContains(query)
+        return model.workflows.filter { workflow in
+            if model.hideDisabledWorkflows && !workflow.enabled { return false }
+            if query.isEmpty { return true }
+            return workflow.name.localizedCaseInsensitiveContains(query)
+                || workflow.keyword.localizedCaseInsensitiveContains(query)
+                || workflow.author.localizedCaseInsensitiveContains(query)
+                || workflow.bundleID.localizedCaseInsensitiveContains(query)
         }
     }
 
@@ -60,6 +63,15 @@ struct WorkflowsPane: View {
         }
         .sheet(isPresented: model.bind(\.showTemplates)) { templateSheet }
         .background(Color(hex: 0x1B1B1B))
+        .onDrop(of: [.fileURL], isTargeted: $dropTargeted, perform: handleWorkflowDrop)
+        .overlay {
+            if dropTargeted {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.accentColor, lineWidth: 3)
+                    .padding(3)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     private var sidebar: some View {
@@ -77,16 +89,34 @@ struct WorkflowsPane: View {
                         .font(.system(size: 12))
                         .foregroundStyle(Color(hex: 0x333333))
                 }
-                Image(systemName: "gearshape")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color(hex: 0x8A8A8A))
+                Menu {
+                    workflowGearMenu
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color(hex: 0x8A8A8A))
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .help("Workflow options")
             }
             .padding(.horizontal, 7)
-            .frame(height: 22)
+            .frame(height: 24)
             .background(RoundedRectangle(cornerRadius: 5).fill(Color(hex: 0xF6F6F6)))
             .padding(.horizontal, 8)
             .padding(.top, 8)
             .padding(.bottom, 6)
+
+            if !model.workflowImportStatus.isEmpty {
+                Text(model.workflowImportStatus)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(model.workflowImportStatus.hasPrefix("Could not") ? Color.orange : Color.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 4)
+            }
 
             ScrollView {
                 LazyVStack(spacing: 0) {
@@ -109,10 +139,30 @@ struct WorkflowsPane: View {
                     .font(.system(size: 11))
                     .padding(.horizontal, 8)
                 Spacer()
-                Button("+") { model.beginWorkflowEdit(blank()) }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 15, weight: .medium))
-                    .frame(width: 24)
+                Button {
+                    chooseWorkflowToImport()
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
+                        .font(.system(size: 11, weight: .medium))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Import an Alfred Workflow")
+                Menu {
+                    Button("New Workflow") { model.beginWorkflowEdit(blank()) }
+                    Button("New from Template…") { model.showTemplates = true }
+                    Divider()
+                    Button("Import Workflow…") { chooseWorkflowToImport() }
+                } label: {
+                    Text("+")
+                        .font(.system(size: 15, weight: .medium))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .help("Add or import a workflow")
                 Button("−") {
                     guard let id = model.selectedWorkflow else { return }
                     model.removeWorkflow(id)
@@ -204,15 +254,83 @@ struct WorkflowsPane: View {
         }
     }
 
+    @ViewBuilder
+    private var workflowGearMenu: some View {
+        Button("Import Workflow…") { chooseWorkflowToImport() }
+        Button("Import from Alfred Library…") { model.importAlfredLibrary() }
+        Divider()
+        Button("Reload from Disk") { model.reloadWorkflowsFromAlfred() }
+        Button("Reveal Workflows Folder") { model.revealImportedWorkflowsFolder() }
+        Divider()
+        Button("Export Selected…") {
+            guard let id = model.selectedWorkflow, let workflow = model.workflows.first(where: { $0.id == id }) else { return }
+            export(workflow, metadataOnly: false)
+        }
+        .disabled(model.selectedWorkflow == nil)
+        Toggle("Hide Disabled Workflows", isOn: model.bind(\.hideDisabledWorkflows))
+    }
+
     private func chooseWorkflowToImport() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
+        panel.canChooseFiles = true
         panel.canChooseDirectories = false
-        if let type = UTType(filenameExtension: "alfredworkflow") {
-            panel.allowedContentTypes = [type, .zip]
+        panel.allowsOtherFileTypes = true
+        panel.treatsFilePackagesAsDirectories = false
+        panel.title = "Import Alfred Workflow"
+        panel.message = "Choose a .alfredworkflow file."
+        panel.prompt = "Import"
+        panel.allowedContentTypes = WorkflowImportPanel.allowedTypes
+        presentFilePanel(panel) { url in
+            if !WorkflowPackage.isImportableFile(url) && url.pathExtension.lowercased() != "zip" {
+                let message = "Could not import \(url.lastPathComponent). It is not an Alfred workflow."
+                model.workflowImportStatus = message
+                model.presentWorkflowImportAlert(title: "Workflow import failed", message: message)
+                return
+            }
+            model.importWorkflow(at: url)
         }
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        model.importWorkflow(at: url)
+    }
+
+    private func presentFilePanel(_ panel: NSSavePanel, onOK: @escaping (URL) -> Void) {
+        NSApp.setActivationPolicy(.regular)
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            panel.level = .modalPanel
+            let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "preferences" })
+            window?.makeKeyAndOrderFront(nil)
+            let handle: (NSApplication.ModalResponse) -> Void = { response in
+                guard response == .OK, let url = panel.url else { return }
+                onOK(url)
+            }
+            if let window, window.isVisible {
+                panel.beginSheetModal(for: window, completionHandler: handle)
+            } else {
+                handle(panel.runModal())
+            }
+        }
+    }
+
+    private func handleWorkflowDrop(_ providers: [NSItemProvider]) -> Bool {
+        let importable = providers.filter { provider in
+            provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+        }
+        guard !importable.isEmpty else { return false }
+        for provider in importable {
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                DispatchQueue.main.async {
+                    if WorkflowPackage.isImportableFile(url) {
+                        model.importWorkflow(at: url)
+                    } else {
+                        let message = "Could not import \(url.lastPathComponent). It is not an Alfred workflow."
+                        model.workflowImportStatus = message
+                        model.presentWorkflowImportAlert(title: "Workflow import failed", message: message)
+                    }
+                }
+            }
+        }
+        return true
     }
 
     private func export(_ workflow: Workflow, metadataOnly: Bool) {
@@ -220,7 +338,12 @@ struct WorkflowsPane: View {
         let base = workflow.name.replacingOccurrences(of: "/", with: "-")
         panel.nameFieldStringValue = base + (metadataOnly ? " Metadata.json" : ".jfred-workflow.json")
         panel.allowedContentTypes = [.json]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        presentFilePanel(panel) { url in
+            writeExportedWorkflow(workflow, metadataOnly: metadataOnly, to: url)
+        }
+    }
+
+    private func writeExportedWorkflow(_ workflow: Workflow, metadataOnly: Bool, to url: URL) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data: Data?
@@ -253,7 +376,7 @@ struct WorkflowsPane: View {
                 card("book", "Getting Started Guide", "Learn how objects, connections and variables fit together.") { model.section = .help }
                 card("point.3.connected.trianglepath.dotted", "Create a Workflow", "Start with a Keyword and build a graph of actions.") { model.beginWorkflowEdit(blank()) }
                 card("square.on.square", "Create from a Template", "Start with a Script Filter, a web search or a shell action.") { model.showTemplates = true }
-                card("square.and.arrow.down", "Import an Alfred Workflow", "Jfred reads Alfred's info.plist objects and connections directly.") { chooseWorkflowToImport() }
+                card("square.and.arrow.down", "Import an Alfred Workflow", "Choose a .alfredworkflow file, or drag one onto this pane.") { chooseWorkflowToImport() }
             }
             .frame(maxWidth: 650)
             .padding(40)
@@ -1600,5 +1723,19 @@ private extension WorkflowObjectKind {
         case .userInterface: return "Show a user interface object."
         case .unknown: return "Unknown object."
         }
+    }
+}
+
+
+private enum WorkflowImportPanel {
+    static var allowedTypes: [UTType] {
+        var types: [UTType] = [.zip]
+        if let type = UTType("com.runningwithcrayons.alfred.workflow") {
+            types.insert(type, at: 0)
+        }
+        if let type = UTType(filenameExtension: "alfredworkflow") {
+            types.insert(type, at: 0)
+        }
+        return types
     }
 }

@@ -86,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
-            if url.pathExtension.lowercased() == "alfredworkflow" {
+            if WorkflowPackage.isImportableFile(url) {
                 model.importWorkflow(at: url)
                 continue
             }

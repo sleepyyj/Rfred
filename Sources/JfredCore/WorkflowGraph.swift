@@ -841,9 +841,12 @@ public enum WorkflowImporter {
         id: UUID? = nil,
         enabledOverride: Bool? = nil
     ) -> Workflow? {
-        let bundleID = string(info["bundleid"]) ?? ""
+        let named = string(info["name"]) ?? ""
+        let rawBundle = string(info["bundleid"]) ?? ""
+        let fallback = rootPath.map { URL(fileURLWithPath: $0, isDirectory: true).lastPathComponent } ?? ""
+        let bundleID = !rawBundle.isEmpty ? rawBundle : (!named.isEmpty ? named : fallback)
         guard !bundleID.isEmpty else { return nil }
-        let name = string(info["name"]) ?? bundleID
+        let name = !named.isEmpty ? named : bundleID
         let author = string(info["createdby"]) ?? "Imported"
         let rawObjects = info["objects"] as? [[String: Any]] ?? []
         let uiData = info["uidata"] as? [String: Any] ?? [:]

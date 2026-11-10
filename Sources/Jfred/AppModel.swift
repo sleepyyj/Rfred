@@ -190,6 +190,8 @@ final class AppModel {
     var workflowConfigEditsMetadata = false
     var workflowConfigSnapshot: Workflow?
     var importNote = ""
+    var workflowImportStatus = ""
+    var hideDisabledWorkflows = false
     var showStatusItem: Bool {
         get { knowledge["statusItem"] != "hidden" }
         set {
@@ -1595,28 +1597,58 @@ final class AppModel {
     }
 
     func importWorkflow(at url: URL) {
-        guard let bundle = JfredStore.importWorkflow(at: url) else {
-            importNote = "Could not import \(url.lastPathComponent)."
-            return
-        }
-        JfredStore.syncWorkflows(self, JfredStore.workflows(), force: true)
-        if let imported = workflows.first(where: { $0.builtin == bundle }) {
-            selectedWorkflow = imported.id
-        }
         section = .workflows
         showPreferences()
-        importNote = "Imported \(url.lastPathComponent)."
+        switch JfredStore.importWorkflow(at: url) {
+        case .failure(let error):
+            let message = "Could not import \(url.lastPathComponent). \(error.errorDescription)"
+            workflowImportStatus = message
+            importNote = message
+            presentWorkflowImportAlert(title: "Workflow import failed", message: message)
+        case .success(let imported):
+            JfredStore.syncWorkflows(self, JfredStore.workflows(), force: true)
+            if let match = workflows.first(where: { $0.builtin == imported.bundleID || $0.bundleID == imported.bundleID || $0.rootPath == imported.destination.path }) {
+                selectedWorkflow = match.id
+            }
+            let message = "Imported \(imported.name) from \(url.lastPathComponent)."
+            workflowImportStatus = message
+            importNote = message
+        }
+    }
+
+    func revealImportedWorkflowsFolder() {
+        let url = JfredStore.importedWorkflowsURL()
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    func presentWorkflowImportAlert(title: String, message: String) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        if let window = preferencesWindow() {
+            window.makeKeyAndOrderFront(nil)
+            alert.beginSheetModal(for: window)
+        } else {
+            alert.runModal()
+        }
     }
 
     func reloadWorkflowsFromAlfred() {
         JfredStore.syncWorkflows(self, JfredStore.reloadWorkflows(), force: true)
-        importNote = "Reloaded \(workflows.filter { $0.builtin != nil }.count) workflows."
+        let message = "Reloaded \(workflows.filter { $0.builtin != nil }.count) workflows."
+        importNote = message
+        workflowImportStatus = message
     }
 
     func importAlfredLibrary() {
         let count = JfredStore.importAllFromAlfred()
         JfredStore.syncWorkflows(self, JfredStore.reloadWorkflows(), force: true)
         importNote = "Imported \(count) workflows from Alfred."
+        workflowImportStatus = importNote
         section = .workflows
         showPreferences()
     }

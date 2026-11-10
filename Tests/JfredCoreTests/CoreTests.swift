@@ -997,3 +997,161 @@ struct ClipboardPreviewTests {
         #expect(ClipboardPreview.resultClickIntent(clickCount: 2, clipboardViewer: false) == .activate)
     }
 }
+
+struct WorkflowPackageTests {
+    @Test func isImportableRecognizesWorkflowExtensions() {
+        #expect(WorkflowPackage.isImportableFile(URL(fileURLWithPath: "/tmp/unit-converter.alfredworkflow")))
+        #expect(WorkflowPackage.isImportableFile(URL(fileURLWithPath: "/tmp/Unit Converter.alfredworkflow.zip")))
+        #expect(!WorkflowPackage.isImportableFile(URL(fileURLWithPath: "/tmp/notes.zip")))
+        #expect(!WorkflowPackage.isImportableFile(URL(fileURLWithPath: "/tmp/photo.png")))
+    }
+
+    @Test func extractsFlatWorkflowArchiveIntoTempDirectory() throws {
+        let root = try scratchDirectory("flat")
+        let zip = try makeWorkflowArchive(in: root, fileName: "sample.alfredworkflow", bundleID: "com.example.unit-converter", name: "Unit Converter", nestInFolder: false)
+        let destination = root.appendingPathComponent("out", isDirectory: true)
+        let imported = try WorkflowPackage.extract(from: zip, to: destination).get()
+        #expect(imported.bundleID == "com.example.unit-converter")
+        #expect(imported.name == "Unit Converter")
+        #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("info.plist").path))
+        let workflow = try #require(WorkflowImporter.workflow(from: try plist(at: destination.appendingPathComponent("info.plist")), rootPath: destination.path))
+        #expect(workflow.bundleID == "com.example.unit-converter")
+        #expect(workflow.name == "Unit Converter")
+    }
+
+    @Test func flattensNestedWorkflowFolder() throws {
+        let root = try scratchDirectory("nested")
+        let zip = try makeWorkflowArchive(in: root, fileName: "nested.alfredworkflow", bundleID: "com.example.nested", name: "Nested", nestInFolder: true)
+        let destination = root.appendingPathComponent("out", isDirectory: true)
+        let imported = try WorkflowPackage.extract(from: zip, to: destination).get()
+        #expect(imported.bundleID == "com.example.nested")
+        #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("info.plist").path))
+        #expect(!FileManager.default.fileExists(atPath: destination.appendingPathComponent("Nested").appendingPathComponent("info.plist").path))
+    }
+
+    @Test func acceptsArchiveWithoutBundleIDUsingFolderName() throws {
+        let root = try scratchDirectory("nobundle")
+        let zip = try makeWorkflowArchive(in: root, fileName: "plain.alfredworkflow", bundleID: "", name: "Plain", nestInFolder: false)
+        let destination = root.appendingPathComponent("imported-folder", isDirectory: true)
+        let imported = try WorkflowPackage.extract(from: zip, to: destination).get()
+        #expect(imported.bundleID == "Plain")
+        #expect(imported.name == "Plain")
+        let workflow = try #require(WorkflowImporter.workflow(from: try plist(at: destination.appendingPathComponent("info.plist")), rootPath: destination.path))
+        #expect(workflow.name == "Plain")
+        #expect(workflow.bundleID == "Plain")
+    }
+
+    @Test func rejectsMissingFileUnsafePathsAndNonWorkflowZips() throws {
+        let root = try scratchDirectory("reject")
+        #expect(WorkflowPackage.extract(from: root.appendingPathComponent("missing.alfredworkflow"), to: root.appendingPathComponent("a")) == .failure(.missingFile))
+
+        let emptyZip = root.appendingPathComponent("empty.zip")
+        try writeStoredZip(entries: [("readme.txt", Data("hi".utf8))], to: emptyZip)
+        #expect(WorkflowPackage.extract(from: emptyZip, to: root.appendingPathComponent("b")) == .failure(.missingInfoPlist))
+
+        let unsafeZip = root.appendingPathComponent("unsafe.alfredworkflow")
+        try writeStoredZip(entries: [("../evil.txt", Data("no".utf8))], to: unsafeZip)
+        #expect(WorkflowPackage.extract(from: unsafeZip, to: root.appendingPathComponent("c")) == .failure(.unsafePath))
+    }
+
+    private func scratchDirectory(_ name: String) throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("jfred-workflow-package-\(name)-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private func makeWorkflowArchive(in directory: URL, fileName: String, bundleID: String, name: String, nestInFolder: Bool) throws -> URL {
+        let source = directory.appendingPathComponent("src", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        let payloadRoot: URL
+        if nestInFolder {
+            payloadRoot = source.appendingPathComponent(name, isDirectory: true)
+            try FileManager.default.createDirectory(at: payloadRoot, withIntermediateDirectories: true)
+        } else {
+            payloadRoot = source
+        }
+        var info: [String: Any] = [
+            "name": name,
+            "objects": [[String: Any]](),
+            "connections": [String: Any](),
+        ]
+        if !bundleID.isEmpty { info["bundleid"] = bundleID }
+        let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+        try data.write(to: payloadRoot.appendingPathComponent("info.plist"))
+        let zip = directory.appendingPathComponent(fileName)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        process.arguments = ["-c", "-k", source.path, zip.path]
+        try process.run()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
+        return zip
+    }
+
+    private func plist(at url: URL) throws -> [String: Any] {
+        let data = try Data(contentsOf: url)
+        let object = try PropertyListSerialization.propertyList(from: data, options: [], format: nil)
+        return try #require(object as? [String: Any])
+    }
+
+    private func writeStoredZip(entries: [(String, Data)], to url: URL) throws {
+        var output = Data()
+        var central = Data()
+        for (name, payload) in entries {
+            let nameData = Data(name.utf8)
+            let crc = crc32(payload)
+            let offset = UInt32(output.count)
+            output.append(contentsOf: [0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+            appendUInt32(&output, crc)
+            appendUInt32(&output, UInt32(payload.count))
+            appendUInt32(&output, UInt32(payload.count))
+            appendUInt16(&output, UInt16(nameData.count))
+            appendUInt16(&output, 0)
+            output.append(nameData)
+            output.append(payload)
+
+            central.append(contentsOf: [0x50, 0x4b, 0x01, 0x02, 0x14, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+            appendUInt32(&central, crc)
+            appendUInt32(&central, UInt32(payload.count))
+            appendUInt32(&central, UInt32(payload.count))
+            appendUInt16(&central, UInt16(nameData.count))
+            appendUInt16(&central, 0)
+            appendUInt16(&central, 0)
+            appendUInt16(&central, 0)
+            appendUInt16(&central, 0)
+            appendUInt32(&central, 0)
+            appendUInt32(&central, offset)
+            central.append(nameData)
+        }
+        let centralOffset = UInt32(output.count)
+        output.append(central)
+        output.append(contentsOf: [0x50, 0x4b, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00])
+        appendUInt16(&output, UInt16(entries.count))
+        appendUInt16(&output, UInt16(entries.count))
+        appendUInt32(&output, UInt32(central.count))
+        appendUInt32(&output, centralOffset)
+        appendUInt16(&output, 0)
+        try output.write(to: url)
+    }
+
+    private func appendUInt16(_ data: inout Data, _ value: UInt16) {
+        var little = value.littleEndian
+        data.append(Data(bytes: &little, count: 2))
+    }
+
+    private func appendUInt32(_ data: inout Data, _ value: UInt32) {
+        var little = value.littleEndian
+        data.append(Data(bytes: &little, count: 4))
+    }
+
+    private func crc32(_ data: Data) -> UInt32 {
+        var crc: UInt32 = 0xFFFF_FFFF
+        for byte in data {
+            crc ^= UInt32(byte)
+            for _ in 0..<8 {
+                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB8_8320 : crc >> 1
+            }
+        }
+        return crc ^ 0xFFFF_FFFF
+    }
+}

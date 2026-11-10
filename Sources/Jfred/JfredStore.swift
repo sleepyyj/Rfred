@@ -244,55 +244,27 @@ enum JfredStore {
     }
 
     @MainActor
-    @discardableResult
-    static func importWorkflow(at url: URL) -> String? {
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+    static func importWorkflow(at url: URL) -> Result<WorkflowPackage.ImportedPackage, WorkflowPackage.ImportError> {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         let root = importedWorkflowsURL()
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let destination = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        // Inspect the archive before extraction: reject absolute paths, parent
-        // traversal and absurd member counts instead of trusting ditto's
-        // extraction behaviour with a hostile .alfredworkflow.
-        guard let members = archiveMembers(url) else { return nil }
-        guard members.count <= 20_000 else { return nil }
-        for member in members {
-            let name = String(member)
-            if name.hasPrefix("/") || name.split(separator: "/").contains("..") { return nil }
-        }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-        process.arguments = ["-x", "-k", url.path, destination.path]
-        do { try process.run() } catch { return nil }
-        process.waitUntilExit()
-        let infoURL = destination.appendingPathComponent("info.plist")
-        guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: infoURL.path) else {
+        switch WorkflowPackage.extract(from: url, to: destination) {
+        case .failure(let error):
             try? FileManager.default.removeItem(at: destination)
-            return nil
-        }
-        let bundle = plist(at: infoURL)?["bundleid"] as? String
-        if let bundle, let entries = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
-            for entry in entries where entry != destination {
-                if let other = plist(at: entry.appendingPathComponent("info.plist")),
-                   other["bundleid"] as? String == bundle {
-                    try? FileManager.default.removeItem(at: entry)
+            return .failure(error)
+        case .success(let imported):
+            if !imported.bundleID.isEmpty, let entries = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
+                for entry in entries where entry.standardizedFileURL != destination.standardizedFileURL {
+                    if let other = plist(at: entry.appendingPathComponent("info.plist")),
+                       (other["bundleid"] as? String) == imported.bundleID {
+                        try? FileManager.default.removeItem(at: entry)
+                    }
                 }
             }
+            return .success(imported)
         }
-        return bundle
-    }
-
-    private static func archiveMembers(_ url: URL) -> [Substring]? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-        process.arguments = ["-Z1", url.path]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-        do { try process.run() } catch { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0, let text = String(data: data, encoding: .utf8) else { return nil }
-        return text.split(separator: "\n", omittingEmptySubsequences: true)
     }
 
     @MainActor

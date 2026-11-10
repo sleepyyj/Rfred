@@ -19,6 +19,10 @@
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>
 			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.runningwithcrayons.alfred.workflow</string>
+			</array>
 		</dict>
 	</array>
 	<key>CFBundleExecutable</key>
@@ -50,6 +54,26 @@
 	<string>0.27.0</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.zip-archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Alfred Workflow</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.runningwithcrayons.alfred.workflow</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>alfredworkflow</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
