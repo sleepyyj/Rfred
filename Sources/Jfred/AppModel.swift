@@ -477,10 +477,25 @@ final class AppModel {
         run(results[selection], forced: action)
     }
 
+    func selectIndex(_ index: Int) {
+        guard results.indices.contains(index) else { return }
+        selection = index
+    }
+
     func commitIndex(_ index: Int) {
         guard results.indices.contains(index) else { return }
         selection = index
         run(results[index], forced: "primary")
+    }
+
+    func handleResultClick(index: Int, clickCount: Int) {
+        let viewer = ClipboardPreview.isViewerQuery(query, keyword: preferences.clipboardViewerKeyword)
+        switch ClipboardPreview.resultClickIntent(clickCount: clickCount, clipboardViewer: viewer) {
+        case .select:
+            selectIndex(index)
+        case .activate:
+            commitIndex(index)
+        }
     }
 
     func showActions() {

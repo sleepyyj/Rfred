@@ -34,6 +34,21 @@ public enum ClipboardPreview {
         public static let empty = Model()
     }
 
+    public enum ResultClickIntent: Equatable, Sendable {
+        case select
+        case activate
+    }
+
+    /// Clipboard history: a single click only highlights so the preview can
+    /// follow; a double click activates (copy/paste). Other launcher modes
+    /// still activate on the first click.
+    public static func resultClickIntent(clickCount: Int, clipboardViewer: Bool) -> ResultClickIntent {
+        if clipboardViewer {
+            return clickCount >= 2 ? .activate : .select
+        }
+        return .activate
+    }
+
     /// Same keyword match the clipboard viewer search uses, including the `clip` alias.
     public static func isViewerQuery(_ raw: String, keyword: String) -> Bool {
         let key = keyword.trimmingCharacters(in: .whitespacesAndNewlines)

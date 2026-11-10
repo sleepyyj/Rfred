@@ -957,4 +957,12 @@ struct ClipboardPreviewTests {
         #expect(ClipboardPreview.isViewerQuery("clip ", keyword: "clipboard"))
         #expect(!ClipboardPreview.isViewerQuery("Safari", keyword: "clipboard"))
     }
+
+    @Test func clipboardClickSelectsUntilDoubleClick() {
+        #expect(ClipboardPreview.resultClickIntent(clickCount: 1, clipboardViewer: true) == .select)
+        #expect(ClipboardPreview.resultClickIntent(clickCount: 2, clipboardViewer: true) == .activate)
+        #expect(ClipboardPreview.resultClickIntent(clickCount: 3, clipboardViewer: true) == .activate)
+        #expect(ClipboardPreview.resultClickIntent(clickCount: 1, clipboardViewer: false) == .activate)
+        #expect(ClipboardPreview.resultClickIntent(clickCount: 2, clipboardViewer: false) == .activate)
+    }
 }

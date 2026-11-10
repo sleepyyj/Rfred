@@ -17,6 +17,7 @@ final class LauncherController {
     nonisolated(unsafe) private var keyMonitor: Any?
     nonisolated(unsafe) private var mouseMonitor: Any?
     nonisolated(unsafe) private var globalMonitor: Any?
+    nonisolated(unsafe) private var scrollMonitor: Any?
     private var quickLookPath: String?
     private var quickLookController: QuickLookPreviewController?
     private var pinnedTop: CGFloat?
@@ -70,12 +71,16 @@ final class LauncherController {
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
             self?.globalMouse(event)
         }
+        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            self?.localScroll(event) ?? event
+        }
     }
 
     deinit {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
+        if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
     }
 
     func showQuickLook(path: String) {
@@ -285,6 +290,65 @@ final class LauncherController {
         default:
             return event
         }
+    }
+
+    /// The query field is first responder, so the wheel can miss the result
+    /// list. Forward the event to the scroll view under the pointer (or the
+    /// clipboard history list) without changing the selection or hiding.
+    private func localScroll(_ event: NSEvent) -> NSEvent? {
+        guard model.launcherVisible, event.window === panel, let panel, let content = panel.contentView else { return event }
+        let point = content.convert(event.locationInWindow, from: nil)
+        let hit = content.hitTest(point)
+        if let scroll = enclosingScrollView(hit) {
+            scroll.scrollWheel(with: event)
+            return nil
+        }
+        let viewer = ClipboardPreview.isViewerQuery(model.query, keyword: model.preferences.clipboardViewerKeyword)
+        if viewer, let scroll = resultsScrollView(), pointerIsOverResultList(point, in: content) {
+            scroll.scrollWheel(with: event)
+            return nil
+        }
+        return event
+    }
+
+    private func enclosingScrollView(_ view: NSView?) -> NSScrollView? {
+        var current = view
+        while let view = current {
+            if let scroll = view as? NSScrollView { return scroll }
+            current = view.superview
+        }
+        return nil
+    }
+
+    private func resultsScrollView() -> NSScrollView? {
+        guard let content = panel?.contentView else { return nil }
+        let views = scrollViews(in: content)
+        guard !views.isEmpty else { return nil }
+        return views.min { lhs, rhs in
+            lhs.convert(lhs.bounds, to: content).minX < rhs.convert(rhs.bounds, to: content).minX
+        }
+    }
+
+    private func scrollViews(in view: NSView) -> [NSScrollView] {
+        var found: [NSScrollView] = []
+        if let scroll = view as? NSScrollView { found.append(scroll) }
+        for child in view.subviews {
+            found.append(contentsOf: scrollViews(in: child))
+        }
+        return found
+    }
+
+    private func pointerIsOverResultList(_ point: NSPoint, in content: NSView) -> Bool {
+        let theme = LauncherTheme.by(id: model.preferences.themeID, custom: model.preferences.customThemes)
+        let bounds = content.bounds
+        let listMaxX = bounds.minX + theme.width
+        if point.x < bounds.minX || point.x > listMaxX { return false }
+        if content.isFlipped {
+            let queryBottom = bounds.minY + theme.paddingV + theme.queryBoxHeight + 6
+            return point.y >= queryBottom
+        }
+        let queryBottom = bounds.maxY - (theme.paddingV + theme.queryBoxHeight + 6)
+        return point.y <= queryBottom
     }
 
     /// Return, Escape, Tab and the arrows confirm, cancel or move an IME
@@ -573,11 +637,22 @@ struct LauncherRoot: View {
         let row = LauncherRow(item: item, index: index, selected: index == model.selection, theme: theme)
             .id(item.id)
             .contentShape(Rectangle())
-            .onTapGesture { model.commitIndex(index) }
+        let clicked = resultClick(row, index: index)
         if item.kind == "app", item.payload.hasPrefix("/") {
-            row.contextMenu { appFileMenu(item) }
+            clicked.contextMenu { appFileMenu(item) }
         } else {
+            clicked
+        }
+    }
+
+    @ViewBuilder
+    private func resultClick(_ row: some View, index: Int) -> some View {
+        if showsClipboardPreview {
             row
+                .onTapGesture(count: 2) { model.handleResultClick(index: index, clickCount: 2) }
+                .onTapGesture(count: 1) { model.handleResultClick(index: index, clickCount: 1) }
+        } else {
+            row.onTapGesture { model.commitIndex(index) }
         }
     }
 
