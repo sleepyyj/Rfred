@@ -88,12 +88,26 @@ public enum WorkflowIcon {
                     if FileManager.default.fileExists(atPath: candidate) { return .image(candidate) }
                 }
             }
-            for name in ["icon.png", "icon.icns", "icon.jpg", "icon.jpeg", "icon.pdf"] {
+            for name in ["icon.png", "icon.icns", "icon.jpg", "icon.jpeg", "icon.pdf", "icon.svg"] {
                 let candidate = URL(fileURLWithPath: root, isDirectory: true)
                     .appendingPathComponent(name).path
                 if FileManager.default.fileExists(atPath: candidate) { return .image(candidate) }
             }
         }
         return .symbol(symbol)
+    }
+}
+
+
+extension Workflow {
+    /// Icon for a workflow-level or object-level row: `<uid>` artwork, then the
+    /// workflow icon, then the configured symbol.
+    public func resolvedIcon(objectUID: String? = nil) -> WorkflowIconRef {
+        WorkflowIcon.resolve(
+            path: "",
+            workflowRoot: rootPath,
+            workflowSymbol: symbol,
+            objectUID: objectUID
+        )
     }
 }

@@ -288,7 +288,7 @@ final class AppModel {
                 }
                 // Keep the previous list visible; mark the subtitle instead of flashing "Running…".
                 if results.isEmpty {
-                    publishResults([statusRow(id: "run:pending", title: match.invocation.keyword, subtitle: "Running…", icon: "symbol:\(match.workflow.symbol)", category: "action")])
+                    publishResults([statusRow(id: "run:pending", title: match.invocation.keyword, subtitle: "Running…", icon: match.workflow.resolvedIcon(objectUID: match.input.alfredUID).resource, category: "action")])
                 } else {
                     searchingSubtitle = "Running…"
                     launcher?.layout(animated: false)
@@ -304,7 +304,7 @@ final class AppModel {
                     self.searchingSubtitle = nil
                     let result = ran ?? WorkflowScriptFilterResult(items: [])
                     let rows = result.items.isEmpty
-                        ? [self.statusRow(id: "run:empty", title: "No matches", subtitle: match.invocation.keyword, icon: "symbol:\(match.workflow.symbol)", category: "action")]
+                        ? [self.statusRow(id: "run:empty", title: "No matches", subtitle: match.invocation.keyword, icon: match.workflow.resolvedIcon(objectUID: match.input.alfredUID).resource, category: "action")]
                         : WorkflowRuntime.rows(for: match, result: result)
                     self.scriptFilterCache[cacheKey] = (Date(), rows)
                     if self.scriptFilterCache.count > 40 {

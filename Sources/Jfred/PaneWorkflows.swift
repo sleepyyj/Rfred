@@ -8,30 +8,33 @@ private enum WorkflowCanvas {
     static let nodeHeight: CGFloat = 100
 }
 
-private func workflowIconImage(_ workflow: Workflow) -> NSImage? {
-    guard let root = workflow.rootPath else { return nil }
-    for name in ["icon.png", "icon.icns", "icon.jpg", "icon.jpeg"] {
-        let path = URL(fileURLWithPath: root, isDirectory: true).appendingPathComponent(name).path
-        if let image = NSImage(contentsOfFile: path) { return image }
+private func artworkImage(from ref: WorkflowIconRef) -> NSImage? {
+    switch ref {
+    case .image(let path):
+        return NSImage(contentsOfFile: path)
+    default:
+        return nil
     }
-    return nil
+}
+
+private func workflowIconImage(_ workflow: Workflow) -> NSImage? {
+    artworkImage(from: workflow.resolvedIcon())
 }
 
 private func objectIconImage(_ object: WorkflowObject, workflow: Workflow?) -> NSImage? {
-    if let root = workflow?.rootPath {
-        let configured = object.config[string: "icon"]
-        if !configured.isEmpty {
-            let path = configured.hasPrefix("/") ? configured : URL(fileURLWithPath: root, isDirectory: true).appendingPathComponent(configured).path
-            if let image = NSImage(contentsOfFile: path) { return image }
+    guard let workflow else { return nil }
+    let configured = object.config[string: "icon"]
+    if !configured.isEmpty {
+        if let image = artworkImage(from: WorkflowIcon.resolve(
+            path: configured,
+            workflowRoot: workflow.rootPath,
+            workflowSymbol: workflow.symbol,
+            objectUID: object.alfredUID
+        )) {
+            return image
         }
     }
-    switch object.kind {
-    case .scriptFilter, .listFilter:
-        if let workflow { return workflowIconImage(workflow) }
-    default:
-        break
-    }
-    return nil
+    return artworkImage(from: workflow.resolvedIcon(objectUID: object.alfredUID))
 }
 
 struct WorkflowsPane: View {
@@ -1205,7 +1208,15 @@ struct WorkflowEditor: View {
     @ViewBuilder
     private func objectInspector(_ object: WorkflowObject) -> some View {
         HStack(spacing: 7) {
-            Image(systemName: object.kind.symbol).font(.system(size: 13))
+            if let icon = objectIconImage(object, workflow: workflow) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 16, height: 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            } else {
+                Image(systemName: object.kind.symbol).font(.system(size: 13))
+            }
             VStack(alignment: .leading, spacing: 0) {
                 Text(object.kind.title).font(.system(size: 13, weight: .semibold))
                 Text(object.type).font(.system(size: 8.5, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)

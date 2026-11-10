@@ -205,7 +205,7 @@ public enum Search {
                 id: "complete:\(workflow.id.uuidString)",
                 title: workflow.name,
                 subtitle: workflow.keyword,
-                icon: "symbol:\(workflow.symbol)",
+                icon: workflow.resolvedIcon().resource,
                 kind: "complete",
                 payload: workflow.keyword + " ",
                 category: "action",

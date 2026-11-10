@@ -178,6 +178,53 @@ import Testing
         }
     }
 
+    @Test func keywordEntryRowUsesWorkflowArtworkNotDefaultSymbol() throws {
+        try withTempWorkflow { root in
+            let icon = root.appendingPathComponent("icon.png")
+            touch(icon)
+            let workflow = Workflow(
+                name: "uicli",
+                keyword: "uicli login",
+                symbol: "puzzlepiece.extension",
+                rootPath: root.path
+            )
+            var context = SearchContext()
+            context.workflows = [workflow]
+            let row = Search.results(for: "uicli", context: context).first { $0.kind == "complete" }
+            #expect(row?.title == "uicli")
+            #expect(row?.subtitle == "uicli login")
+            #expect(row?.icon == "image:\(icon.path)")
+            #expect(workflow.resolvedIcon() == .image(icon.path))
+        }
+    }
+
+    @Test func keywordEntryRowWithoutArtworkFallsBackToSymbol() {
+        let workflow = Workflow(name: "plain", keyword: "do", symbol: "bolt.fill")
+        var context = SearchContext()
+        context.workflows = [workflow]
+        let row = Search.results(for: "plain", context: context).first { $0.kind == "complete" }
+        #expect(row?.icon == "symbol:bolt.fill")
+        #expect(workflow.resolvedIcon() == .symbol("bolt.fill"))
+    }
+
+    @Test func objectFallbackPrefersUIDArtworkThenWorkflowIcon() throws {
+        try withTempWorkflow { root in
+            let uid = "E3ECB253-83C7-4ADD-9017-8F5297A6FB1C"
+            let objectIcon = root.appendingPathComponent("\(uid).png")
+            let workflowIcon = root.appendingPathComponent("icon.png")
+            touch(objectIcon)
+            touch(workflowIcon)
+            let workflow = Workflow(
+                name: "uicli",
+                keyword: "uicli login",
+                symbol: "puzzlepiece.extension",
+                rootPath: root.path
+            )
+            #expect(workflow.resolvedIcon(objectUID: uid) == .image(objectIcon.path))
+            #expect(workflow.resolvedIcon() == .image(workflowIcon.path))
+        }
+    }
+
     @Test func typelessPDFIconLoadsAsArtworkNotWorkspaceIcon() throws {
         try withTempWorkflow { root in
             touch(root.appendingPathComponent("icon.png"))
