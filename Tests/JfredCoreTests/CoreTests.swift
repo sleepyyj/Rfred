@@ -907,3 +907,54 @@ struct WorkflowPersistenceTests {
         #expect(merged.first?.rootPath == "/new/ImportedWorkflows/abc")
     }
 }
+
+
+struct ClipboardPreviewTests {
+    @Test func abbreviatesHomePath() {
+        #expect(ClipboardPreview.abbreviatedPath("/Users/demo/Desktop/Sunflower_sky_backdrop.jpg", home: "/Users/demo") == "~/Desktop/Sunflower_sky_backdrop.jpg")
+        #expect(ClipboardPreview.abbreviatedPath("/Users/demo", home: "/Users/demo") == "~")
+        #expect(ClipboardPreview.abbreviatedPath("/tmp/file.png", home: "/Users/demo") == "/tmp/file.png")
+    }
+
+    @Test func detectsImageFiles() {
+        #expect(ClipboardPreview.isImageFile(path: "/tmp/photo.PNG"))
+        #expect(ClipboardPreview.isImageFile(path: "Sunflower_sky_backdrop.jpg"))
+        #expect(ClipboardPreview.isImageFile(path: "shot.heic"))
+        #expect(ClipboardPreview.isImageFile(path: "scan.gif"))
+        #expect(!ClipboardPreview.isImageFile(path: "/tmp/notes.txt"))
+        #expect(!ClipboardPreview.isImageFile(path: "/tmp/archive.zip"))
+    }
+
+    @Test func formatsByteSizesAndDimensions() {
+        #expect(ClipboardPreview.byteSizeLabel(32) == "32 B")
+        #expect(ClipboardPreview.byteSizeLabel(128_000) == "128 KB")
+        #expect(ClipboardPreview.byteSizeLabel(4_700_000) == "4.7 MB")
+        #expect(ClipboardPreview.dimensionLabel(width: 1528, height: 806, byteCount: 4_700_000) == "1528x806 (4.7 MB)")
+        #expect(ClipboardPreview.dimensionLabel(width: 100, height: 50) == "100x50")
+        #expect(ClipboardPreview.fileListTitle(paths: ["/Users/demo/Desktop/Sunflower_sky_backdrop.jpg"]) == "File: Sunflower_sky_backdrop.jpg")
+        #expect(ClipboardPreview.imageListTitle(path: nil) == "Image")
+        #expect(ClipboardPreview.imageListTitle(path: "/tmp/does-not-exist-jfred-clip.png") == "Image")
+    }
+
+    @Test func copiedCaptionUsesRelativeDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = Date(timeIntervalSince1970: 1_700_000_000) // 2023-11-14 22:13:20 UTC
+        let today = now
+        let yesterday = now.addingTimeInterval(-86_400)
+        let older = Date(timeIntervalSince1970: 1_699_000_000)
+        let en = Locale(identifier: "en_US_POSIX")
+        let zh = Locale(identifier: "zh_CN")
+        #expect(ClipboardPreview.copiedCaption(date: today, now: now, calendar: calendar, locale: en) == "Copied Today 22:13")
+        #expect(ClipboardPreview.copiedCaption(date: yesterday, now: now, calendar: calendar, locale: en) == "Copied Yesterday 22:13")
+        #expect(ClipboardPreview.copiedCaption(date: today, now: now, calendar: calendar, locale: zh) == "今天 22:13 复制")
+        #expect(ClipboardPreview.copiedCaption(date: yesterday, now: now, calendar: calendar, locale: zh) == "昨天 22:13 复制")
+        let olderEN = ClipboardPreview.copiedCaption(date: older, now: now, calendar: calendar, locale: en)
+        #expect(olderEN.hasPrefix("Copied "))
+        #expect(olderEN.contains("22:26") || olderEN.contains("2023"))
+        #expect(ClipboardPreview.isViewerQuery("clipboard", keyword: "clipboard"))
+        #expect(ClipboardPreview.isViewerQuery("clipboard foo", keyword: "clipboard"))
+        #expect(ClipboardPreview.isViewerQuery("clip ", keyword: "clipboard"))
+        #expect(!ClipboardPreview.isViewerQuery("Safari", keyword: "clipboard"))
+    }
+}

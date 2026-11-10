@@ -152,10 +152,18 @@ final class LauncherController {
         let height = header + buffer + listHeight + (rows > 0 ? theme.paddingV : 0)
         var frame = panel.frame
         let top = pinnedTop ?? frame.maxY
-        frame.size = NSSize(width: theme.width, height: height)
+        let preview = ClipboardPreview.isViewerQuery(model.query, keyword: model.preferences.clipboardViewerKeyword)
+            ? LauncherMetrics.clipboardPreviewWidth
+            : 0
+        let width = theme.width + preview
+        let delta = width - frame.width
+        frame.size = NSSize(width: width, height: height)
+        frame.origin.x -= delta / 2
         frame.origin.y = top - height
         if let screen = panel.screen ?? NSScreen.main {
             let visible = screen.visibleFrame
+            if frame.minX < visible.minX { frame.origin.x = visible.minX }
+            if frame.maxX > visible.maxX { frame.origin.x = visible.maxX - frame.width }
             if frame.minY < visible.minY {
                 frame.origin.y = max(visible.minY, visible.maxY - frame.height)
             }
@@ -424,9 +432,13 @@ struct LauncherRoot: View {
                     .padding(.horizontal, theme.paddingH)
                     .padding(.bottom, theme.paddingV)
             } else if !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                resultList(theme)
-                    .padding(.horizontal, theme.paddingH)
-                    .padding(.bottom, theme.paddingV)
+                if showsClipboardPreview {
+                    clipboardHistoryBody(theme)
+                } else {
+                    resultList(theme)
+                        .padding(.horizontal, theme.paddingH)
+                        .padding(.bottom, theme.paddingV)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -448,6 +460,31 @@ struct LauncherRoot: View {
             model.closeActions()
             model.scheduleSearch()
         }
+    }
+
+    private var showsClipboardPreview: Bool {
+        ClipboardPreview.isViewerQuery(model.query, keyword: model.preferences.clipboardViewerKeyword)
+    }
+
+    private func clipboardHistoryBody(_ theme: LauncherTheme) -> some View {
+        let count = model.results.count
+        let shown = min(max(count, 1), LauncherMetrics.visibleRows)
+        let height = LauncherMetrics.listHeight(rows: shown, rowHeight: theme.rowHeight)
+        return HStack(alignment: .top, spacing: 0) {
+            resultList(theme)
+                .frame(width: theme.width - theme.paddingH * 2)
+                .padding(.leading, theme.paddingH)
+            Rectangle()
+                .fill(theme.border.opacity(0.45))
+                .frame(width: 1)
+                .padding(.vertical, 2)
+            ClipboardPreviewPane(model: model, theme: theme)
+                .frame(width: LauncherMetrics.clipboardPreviewWidth - theme.paddingH)
+                .padding(.trailing, 4)
+        }
+        .frame(height: height)
+        .padding(.bottom, theme.paddingV)
+        .transaction { $0.animation = nil }
     }
 
     private func actionList(_ theme: LauncherTheme) -> some View {
@@ -645,6 +682,8 @@ struct QueryField: NSViewRepresentable {
 enum LauncherMetrics {
     static let visibleRows = 9
     static let rowGap: CGFloat = 2
+    /// Right-hand preview column shown in the clipboard viewer.
+    static let clipboardPreviewWidth: CGFloat = 360
 
     static func listHeight(rows: Int, rowHeight: CGFloat) -> CGFloat {
         guard rows > 0 else { return 0 }

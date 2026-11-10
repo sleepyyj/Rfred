@@ -604,15 +604,17 @@ public enum Search {
             let icon: String
             switch kind {
             case "image":
-                let row = ClipboardText.row(text: clip.text, fallback: "Clipboard image")
-                let placeholder = clip.text.isEmpty || clip.text == "Image"
-                title = placeholder ? "Image" : row.title
-                subtitle = placeholder || row.subtitle == "Clipboard image" ? "Clipboard image" : row.subtitle
+                title = ClipboardPreview.imageListTitle(path: clip.imageFile)
+                if !clip.text.isEmpty, clip.text != "Image" {
+                    subtitle = ClipboardText.row(text: clip.text, fallback: "Clipboard image").title
+                } else {
+                    subtitle = "Clipboard image"
+                }
                 icon = clip.imageFile.map { "clipimage:\($0)" } ?? "symbol:photo"
             case "file":
                 let paths = clip.filePaths ?? []
-                title = paths.prefix(2).map { ($0 as NSString).lastPathComponent }.joined(separator: ", ")
-                subtitle = paths.joined(separator: "  ·  ")
+                title = ClipboardPreview.fileListTitle(paths: paths)
+                subtitle = paths.map { ClipboardPreview.abbreviatedPath($0) }.joined(separator: "  ·  ")
                 icon = paths.first.map { "file:\($0)" } ?? "symbol:doc"
             default:
                 let row = ClipboardText.row(text: clip.text, fallback: "Clipboard")
