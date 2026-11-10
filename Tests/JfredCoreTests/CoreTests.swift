@@ -348,6 +348,11 @@ struct CoreTests {
 
 @Test func updateVersionsAndOfficialURLs() {
     #expect(AppVersion.compare("0.9.0", "0.10.0") == .orderedAscending)
+    #expect(AppVersion.compare("0.30.7", "1.0.0") == .orderedAscending)
+    #expect(AppVersion.compare("1.0.0", "0.30.6") == .orderedDescending)
+    #expect(AppVersion.compare("1.0.0", "1.0.1") == .orderedAscending)
+    #expect(AppVersion.compare("1.0.0", "1.1.0") == .orderedAscending)
+    #expect(AppVersion.compare("v1.0.0", "1.0.0") == .orderedSame)
     #expect(AppVersion.compare("v0.14.0", "0.14.0") == .orderedSame)
     #expect(AppVersion.compare("0.14.0", "0.14.0-beta") == .orderedDescending)
     #expect(AppVersion.compare("nope", "1.0.0") == nil)
@@ -427,6 +432,28 @@ struct CoreTests {
     """.utf8), architecture: "arm64")
     #expect(clipped.releases[0].notes.hasSuffix("\n…"))
     #expect(clipped.releases[0].notes.count == AppUpdateFeed.notesLimit + 2)
+}
+
+@Test func updateFeedTreatsOneOhAsNewerThanZeroThirty() throws {
+    let sha = String(repeating: "ab", count: 32)
+    let feed = """
+    [
+      {"tag_name":"v0.30.7","prerelease":false,"body":"patch","assets":[\(asset("0.30.7", sha, 10))]},
+      {"tag_name":"v1.0.0","prerelease":false,"body":"one oh","assets":[\(asset("1.0.0", sha, 20))]}
+    ]
+    """
+    let catalog = try AppUpdateFeed.parse(Data(feed.utf8), architecture: "arm64")
+    let behind = AppUpdateFeed.offer(in: catalog, channel: .updates, current: "0.30.7")
+    guard case .available(let release) = behind else {
+        Issue.record("expected 1.0.0 to be offered over 0.30.7")
+        return
+    }
+    #expect(release.version == "1.0.0")
+    let current = AppUpdateFeed.offer(in: catalog, channel: .updates, current: "1.0.0")
+    guard case .upToDate = current else {
+        Issue.record("1.0.0 should be up to date against a 1.0.0 feed")
+        return
+    }
 }
 
 @Test func updateChecksumMatchesFileBytes() throws {

@@ -110,29 +110,36 @@ jobs:
           prev="${{ steps.version.outputs.prev }}"
           dmg="$(ls dist/Jfred-*.dmg)"
           notes="${RUNNER_TEMP}/release-notes.md"
-          {
-            echo "## What's Changed"
+          ver="${{ steps.version.outputs.ver }}"
+          if python3 ./scripts/changelog-notes.py "$ver" > "$notes"; then
             if [ -n "$prev" ]; then
-              git log --pretty=format:'- %s' "${prev}..HEAD"
-            else
-              git log --pretty=format:'- %s'
-            fi | sed 's/\.$//'
-            echo
-            echo
-            if [ -n "$prev" ]; then
-              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${tag}"
+              printf '\n**Full Changelog**: https://github.com/%s/compare/%s...%s\n' "$GITHUB_REPOSITORY" "$prev" "$tag" >> "$notes"
             fi
-          } > "$notes"
-          if ! grep -q '^- ' "$notes"; then
-            subject="$(git log -1 --pretty=format:'%s' | sed 's/\.$//')"
+          else
             {
               echo "## What's Changed"
-              echo "- ${subject}"
+              if [ -n "$prev" ]; then
+                git log --pretty=format:'- %s' "${prev}..HEAD"
+              else
+                git log --pretty=format:'- %s'
+              fi | sed 's/\.$//'
+              echo
               echo
               if [ -n "$prev" ]; then
                 echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${tag}"
               fi
             } > "$notes"
+            if ! grep -q '^- ' "$notes"; then
+              subject="$(git log -1 --pretty=format:'%s' | sed 's/\.$//')"
+              {
+                echo "## What's Changed"
+                echo "- ${subject}"
+                echo
+                if [ -n "$prev" ]; then
+                  echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${tag}"
+                fi
+              } > "$notes"
+            fi
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
