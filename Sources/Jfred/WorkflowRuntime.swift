@@ -25,7 +25,7 @@ enum WorkflowRuntime {
                 id: "wf:\(match.workflow.id.uuidString):\(match.input.id.uuidString):\(suffix)",
                 title: item.title.isEmpty ? match.workflow.name : item.title,
                 subtitle: item.subtitle.isEmpty ? match.workflow.details : item.subtitle,
-                icon: icon(for: item, workflow: match.workflow),
+                icon: icon(for: item, workflow: match.workflow, objectUID: match.input.alfredUID),
                 kind: "workflow",
                 payload: payload,
                 category: "action",
@@ -40,7 +40,12 @@ enum WorkflowRuntime {
             id: "wf:\(match.workflow.id.uuidString):\(match.input.id.uuidString)",
             title: match.workflow.name,
             subtitle: match.workflow.details.isEmpty ? "Workflow  ·  \(match.invocation.keyword)" : match.workflow.details,
-            icon: "symbol:\(match.workflow.symbol)",
+            icon: WorkflowIcon.resolve(
+                path: "",
+                workflowRoot: match.workflow.rootPath,
+                workflowSymbol: match.workflow.symbol,
+                objectUID: match.input.alfredUID
+            ).resource,
             kind: "workflow",
             payload: payload,
             category: "action",
@@ -69,23 +74,13 @@ enum WorkflowRuntime {
         return await engine(for: workflow).run(invocation: invocation, item: payload.item, modifier: modifier)
     }
 
-    static func icon(for item: WorkflowItem, workflow: Workflow) -> String {
-        if item.iconPath.isEmpty, let root = workflow.rootPath {
-            for name in ["icon.png", "icon.icns"] {
-                let path = URL(fileURLWithPath: root, isDirectory: true).appendingPathComponent(name).path
-                if FileManager.default.fileExists(atPath: path) { return "file:\(path)" }
-            }
-        }
-        guard !item.iconPath.isEmpty else { return "symbol:\(workflow.symbol)" }
-        if item.iconType == "filetype" { return "symbol:doc" }
-        var path = (item.iconPath as NSString).expandingTildeInPath
-        if !path.hasPrefix("/") {
-            if let root = workflow.rootPath {
-                path = URL(fileURLWithPath: root, isDirectory: true).appendingPathComponent(path).path
-            }
-        }
-        if FileManager.default.fileExists(atPath: path) { return "file:\(path)" }
-        if item.iconPath.hasPrefix("http://") || item.iconPath.hasPrefix("https://") { return "symbol:globe" }
-        return "symbol:\(workflow.symbol)"
+    static func icon(for item: WorkflowItem, workflow: Workflow, objectUID: String? = nil) -> String {
+        WorkflowIcon.resolve(
+            path: item.iconPath,
+            type: item.iconType,
+            workflowRoot: workflow.rootPath,
+            workflowSymbol: workflow.symbol,
+            objectUID: objectUID
+        ).resource
     }
 }

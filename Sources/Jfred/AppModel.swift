@@ -1210,6 +1210,14 @@ final class AppModel {
             guard item.icon.hasPrefix("file:") else { return nil }
             return String(item.icon.dropFirst("file:".count))
         }
+        let artwork = visible.compactMap { item -> String? in
+            guard item.icon.hasPrefix("image:") else { return nil }
+            return String(item.icon.dropFirst("image:".count))
+        }
+        let fileTypes = visible.compactMap { item -> String? in
+            guard item.icon.hasPrefix("filetype:") else { return nil }
+            return String(item.icon.dropFirst("filetype:".count))
+        }
         let previews = visible.compactMap { item -> String? in
             guard item.icon.hasPrefix("clipimage:") else { return nil }
             return String(item.icon.dropFirst("clipimage:".count))
@@ -1220,6 +1228,12 @@ final class AppModel {
         }
         if !paths.isEmpty || !badges.isEmpty {
             IconCache.shared.prefetch(paths + badges)
+        }
+        if !artwork.isEmpty {
+            IconCache.shared.prefetchArtwork(artwork)
+        }
+        if !fileTypes.isEmpty {
+            IconCache.shared.prefetchFileTypes(fileTypes)
         }
         if !previews.isEmpty {
             IconCache.shared.prefetchPreviews(previews)

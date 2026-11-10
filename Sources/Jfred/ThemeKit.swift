@@ -2,6 +2,7 @@ import AppKit
 import ImageIO
 import JfredCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum JfredColor {
     /// Alfred-style two-level purple sidebar: a lighter rail, a deep list.
@@ -569,8 +570,12 @@ struct ResultIcon: View {
         Group {
             if icon.hasPrefix("clipimage:") {
                 AppIcon(path: String(icon.dropFirst("clipimage:".count)), preview: true, side: size)
+            } else if icon.hasPrefix("image:") {
+                AppIcon(path: String(icon.dropFirst("image:".count)), artwork: true, side: size)
             } else if icon.hasPrefix("file:") {
                 AppIcon(path: String(icon.dropFirst("file:".count)), side: size)
+            } else if icon.hasPrefix("filetype:") {
+                AppIcon(path: String(icon.dropFirst("filetype:".count)), fileType: true, side: size)
             } else if icon.hasPrefix("symbol:") {
                 Image(systemName: String(icon.dropFirst("symbol:".count)))
                     .font(.system(size: size * 0.62))
@@ -591,10 +596,10 @@ final class IconCache {
     private var images: [String: NSImage] = [:]
     private let side: CGFloat = 40
 
-    func image(for path: String, preview: Bool = false) -> NSImage {
-        let key = preview ? "preview:\(path)" : path
+    func image(for path: String, preview: Bool = false, artwork: Bool = false, fileType: Bool = false) -> NSImage {
+        let key = cacheKey(path, preview: preview, artwork: artwork, fileType: fileType)
         if let cached = images[key] { return cached }
-        let rendered = render(path, preview: preview)
+        let rendered = render(path, preview: preview, artwork: artwork, fileType: fileType)
         images[key] = rendered
         return rendered
     }
@@ -607,7 +612,7 @@ final class IconCache {
         func step() {
             let end = min(index + 20, missing.count)
             while index < end {
-                images[missing[index]] = render(missing[index], preview: false)
+                images[missing[index]] = render(missing[index], preview: false, artwork: false, fileType: false)
                 index += 1
             }
             if index < missing.count {
@@ -617,17 +622,75 @@ final class IconCache {
         DispatchQueue.main.async(execute: step)
     }
 
-    func prefetchPreviews(_ paths: [String]) {
-        let missing = paths.filter { images["preview:\($0)"] == nil }
+    func prefetchArtwork(_ paths: [String]) {
+        let missing = paths.filter { images[cacheKey($0, artwork: true)] == nil }
         guard !missing.isEmpty else { return }
-        for path in missing {
-            images["preview:\(path)"] = render(path, preview: true)
+        var index = 0
+        func step() {
+            let end = min(index + 20, missing.count)
+            while index < end {
+                let path = missing[index]
+                images[cacheKey(path, artwork: true)] = render(path, preview: false, artwork: true, fileType: false)
+                index += 1
+            }
+            if index < missing.count {
+                DispatchQueue.main.async(execute: step)
+            }
+        }
+        DispatchQueue.main.async(execute: step)
+    }
+
+    func prefetchFileTypes(_ types: [String]) {
+        for type in types where images[cacheKey(type, fileType: true)] == nil {
+            images[cacheKey(type, fileType: true)] = render(type, preview: false, artwork: false, fileType: true)
         }
     }
 
-    private func render(_ path: String, preview: Bool) -> NSImage {
+    func prefetchPreviews(_ paths: [String]) {
+        let missing = paths.filter { images[cacheKey($0, preview: true)] == nil }
+        guard !missing.isEmpty else { return }
+        for path in missing {
+            images[cacheKey(path, preview: true)] = render(path, preview: true, artwork: false, fileType: false)
+        }
+    }
+
+    private func cacheKey(_ path: String, preview: Bool = false, artwork: Bool = false, fileType: Bool = false) -> String {
+        if preview { return "preview:\(path)" }
+        if fileType { return "filetype:\(path)" }
+        if artwork { return "image:\(path)" }
+        return path
+    }
+
+    private func render(_ path: String, preview: Bool, artwork: Bool, fileType: Bool) -> NSImage {
         if preview, let thumbnail = imageThumbnail(path) { return thumbnail }
+        if fileType { return sized(workspaceIcon(forFileType: path)) }
+        if artwork, let artworkImage = artworkImage(at: path) {
+            return sized(artworkImage)
+        }
         let source = path.isEmpty ? NSWorkspace.shared.icon(for: .folder) : NSWorkspace.shared.icon(forFile: path)
+        return sized(source)
+    }
+
+    private func workspaceIcon(forFileType value: String) -> NSImage {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let type = UTType(trimmed) { return NSWorkspace.shared.icon(for: type) }
+        if let type = UTType(filenameExtension: trimmed) { return NSWorkspace.shared.icon(for: type) }
+        return NSWorkspace.shared.icon(for: .data)
+    }
+
+    private func artworkImage(at path: String) -> NSImage? {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), !isDirectory.boolValue else {
+            return nil
+        }
+        if let image = NSImage(contentsOfFile: path), image.isValid,
+           image.size.width > 0, image.size.height > 0, !image.representations.isEmpty {
+            return image
+        }
+        return imageThumbnail(path)
+    }
+
+    private func sized(_ source: NSImage) -> NSImage {
         var rect = NSRect(x: 0, y: 0, width: side * 2, height: side * 2)
         guard let cg = source.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
             source.size = NSSize(width: side, height: side)
@@ -656,6 +719,8 @@ final class IconCache {
 struct AppIcon: NSViewRepresentable {
     var path: String
     var preview: Bool = false
+    var artwork: Bool = false
+    var fileType: Bool = false
     var side: CGFloat = 40
     func makeNSView(context: Context) -> NSImageView {
         let view = NSImageView()
@@ -668,11 +733,11 @@ struct AppIcon: NSViewRepresentable {
         view.setContentHuggingPriority(.defaultLow, for: .vertical)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        view.image = IconCache.shared.image(for: path, preview: preview)
+        view.image = IconCache.shared.image(for: path, preview: preview, artwork: artwork, fileType: fileType)
         return view
     }
     func updateNSView(_ nsView: NSImageView, context: Context) {
-        nsView.image = IconCache.shared.image(for: path, preview: preview)
+        nsView.image = IconCache.shared.image(for: path, preview: preview, artwork: artwork, fileType: fileType)
     }
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSImageView, context: Context) -> CGSize? {
         CGSize(width: side, height: side)
