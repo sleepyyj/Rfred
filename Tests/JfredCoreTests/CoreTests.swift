@@ -794,3 +794,116 @@ struct FileActionTests {
         #expect(items.allSatisfy { $0.path.hasPrefix("/") && FileManager.default.fileExists(atPath: $0.path) })
     }
 }
+
+struct WorkflowPersistenceTests {
+    @Test func workflowSyncKeepsMissingImportedBundle() {
+        let kept = Workflow(
+            name: "Keep Me",
+            builtin: "com.example.keep",
+            bundleID: "com.example.keep",
+            rootPath: "/tmp/does-not-exist-jfred-workflow"
+        )
+        let legacy = Workflow(name: "Epoch", builtin: "epoch", bundleID: "epoch")
+        let importedUser = Workflow(
+            name: "Legacy Key but Imported",
+            builtin: "dev",
+            bundleID: "dev",
+            rootPath: "/Users/demo/Library/Application Support/Jfred/ImportedWorkflows/abc"
+        )
+        let added = Workflow(
+            name: "New One",
+            builtin: "com.example.new",
+            bundleID: "com.example.new",
+            rootPath: "/tmp/new"
+        )
+        let merged = WorkflowSync.merge(existing: [kept, legacy, importedUser], imported: [added])
+        #expect(merged.contains { $0.bundleID == "com.example.keep" })
+        #expect(merged.contains { $0.bundleID == "com.example.new" })
+        #expect(merged.contains { $0.name == "Legacy Key but Imported" })
+        #expect(!merged.contains { $0.name == "Epoch" })
+        #expect(merged.first { $0.bundleID == "com.example.keep" }?.isMissingBundle == true)
+        #expect(Workflow(name: "Hand made").isMissingBundle == false)
+    }
+
+    @Test func workflowReloadDoesNotRemoveExisting() {
+        let kept = Workflow(
+            name: "Keep Me",
+            builtin: "com.example.keep",
+            bundleID: "com.example.keep",
+            rootPath: "/old/path"
+        )
+        let other = Workflow(
+            name: "Other",
+            builtin: "com.example.other",
+            bundleID: "com.example.other",
+            rootPath: "/missing"
+        )
+        let refreshed = Workflow(
+            name: "Keep Me",
+            author: "",
+            symbol: "puzzlepiece.extension",
+            tint: WorkflowImporter.tint(for: "com.example.keep"),
+            enabled: true,
+            builtin: "com.example.keep",
+            objects: [],
+            connections: [],
+            bundleID: "com.example.keep",
+            version: "2.0",
+            rootPath: "/new/path",
+            definitionVersion: 1
+        )
+        let merged = WorkflowSync.merge(existing: [kept, other], imported: [refreshed], force: true)
+        #expect(merged.contains { $0.bundleID == "com.example.other" })
+        #expect(merged.first { $0.bundleID == "com.example.keep" }?.rootPath == "/new/path")
+        #expect(merged.first { $0.bundleID == "com.example.keep" }?.id == kept.id)
+    }
+
+    @Test func workflowDecodeSkipsOnlyBadItem() throws {
+        let goodID = UUID()
+        let json = Data("""
+        {"workflows":[
+          {"id":"\(goodID.uuidString)","name":"Good","enabled":true,"bundleID":"com.good","objects":[],"connections":[]},
+          {"id":"not-a-uuid","name":"Broken","objects":"bogus"},
+          {"name":"Also Good","bundleID":"com.also","objects":[],"connections":[]}
+        ]}
+        """.utf8)
+        struct WorkflowList: Decodable {
+            var workflows: LossyDecodableArray<Workflow>
+        }
+        let decoded = try JSONDecoder().decode(WorkflowList.self, from: json)
+        #expect(decoded.workflows.elements.count == 2)
+        #expect(decoded.workflows.skippedIndexes == [1])
+        #expect(decoded.workflows.elements.map(\.bundleID).contains("com.good"))
+        #expect(decoded.workflows.elements.map(\.bundleID).contains("com.also"))
+        #expect(decoded.workflows.elements.contains { $0.id == goodID })
+    }
+
+    @Test func stateBackupPolicySkipsDegraded() {
+        let previous = Data(#"{"preferences":{},"workflows":[{"name":"A"}]}"#.utf8)
+        #expect(StateFile.isPlausible(previous))
+        #expect(StateFile.isDegraded(newWorkflowCount: 0, previous: previous))
+        #expect(!StateFile.isDegraded(newWorkflowCount: 2, previous: previous))
+        #expect(!StateFile.shouldUpdateBackup(current: previous, newWorkflowCount: 0, allowed: true))
+        #expect(StateFile.shouldUpdateBackup(current: previous, newWorkflowCount: 2, allowed: true))
+        #expect(!StateFile.shouldUpdateBackup(current: previous, newWorkflowCount: 2, allowed: false))
+        #expect(!StateFile.shouldUpdateBackup(current: Data("not-json".utf8), newWorkflowCount: 2, allowed: true))
+    }
+
+    @Test func workflowSyncRelocatesRootPath() {
+        let kept = Workflow(
+            name: "Keep Me",
+            builtin: "com.example.keep",
+            bundleID: "com.example.keep",
+            rootPath: "/old/ImportedWorkflows/abc"
+        )
+        let merged = WorkflowSync.merge(
+            existing: [kept],
+            imported: [],
+            force: true,
+            relocatedRoot: { path in
+                path.hasPrefix("/old/") ? "/new/" + path.dropFirst("/old/".count) : nil
+            }
+        )
+        #expect(merged.first?.rootPath == "/new/ImportedWorkflows/abc")
+    }
+}

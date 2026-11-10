@@ -15,7 +15,20 @@ enum JfredStore {
     /// Jfred's workflow library: only workflows explicitly imported into the
     /// app. Alfred's own library is not loaded until the user asks for it.
     static func workflows() -> [Workflow] {
-        loadWorkflows(from: importedWorkflowsURL())
+        migrateImportedWorkflowsIfNeeded()
+        let primary = loadWorkflows(from: currentImportedWorkflowsURL())
+        let fallback = loadWorkflows(from: legacyImportedWorkflowsURL())
+        var seen = Set(primary.map(\.bundleID).filter { !$0.isEmpty })
+        var loaded = primary
+        for item in fallback {
+            if let root = item.rootPath, relocatedRootPath(root) != nil { continue }
+            if !item.bundleID.isEmpty {
+                if seen.contains(item.bundleID) { continue }
+                seen.insert(item.bundleID)
+            }
+            loaded.append(item)
+        }
+        return loaded.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     @MainActor
@@ -43,33 +56,12 @@ enum JfredStore {
 
     @MainActor
     static func syncWorkflows(_ model: AppModel, _ imported: [Workflow], force: Bool = false) {
-        let bundles = Set(imported.map(\.bundleID))
-        let legacy: Set<String> = ["dev", "epoch", "unit", "kill", "tabs", "profiles", "windows", "ui"]
-        model.workflows.removeAll { workflow in
-            guard let key = workflow.builtin else { return false }
-            if legacy.contains(key) { return true }
-            return !bundles.contains(key)
-        }
-        for item in imported {
-            if let index = model.workflows.firstIndex(where: { $0.builtin == item.bundleID }) {
-                let existing = model.workflows[index]
-                var merged = item
-                merged.id = existing.id
-                merged.enabled = existing.enabled && item.enabled
-                merged.hotkey = existing.hotkey
-                if !force, !existing.objects.isEmpty,
-                   existing.definitionVersion >= item.definitionVersion,
-                   existing.version == item.version {
-                    // Keep in-app edits unless the workflow definition changed.
-                    continue
-                }
-                if existing.symbol != "puzzlepiece.extension" { merged.symbol = existing.symbol }
-                if existing.tint != WorkflowImporter.tint(for: item.bundleID) { merged.tint = existing.tint }
-                model.workflows[index] = merged
-            } else {
-                model.workflows.append(item)
-            }
-        }
+        model.workflows = WorkflowSync.merge(
+            existing: model.workflows,
+            imported: imported,
+            force: force,
+            relocatedRoot: relocatedRootPath
+        )
         if model.selectedWorkflow == nil { model.selectedWorkflow = model.workflows.first?.id }
         model.workflowEdited()
     }
@@ -163,8 +155,92 @@ enum JfredStore {
         try? FileManager.default.moveItem(at: url, to: destination)
     }
 
+    /// Current library: alongside `state.json` under Application Support/JfredLocal.
     static func importedWorkflowsURL() -> URL {
-        snapshotURL().deletingLastPathComponent().appendingPathComponent("ImportedWorkflows", isDirectory: true)
+        migrateImportedWorkflowsIfNeeded()
+        return currentImportedWorkflowsURL()
+    }
+
+    /// Pre-migration location. Kept readable as a fallback; never deleted.
+    static func legacyImportedWorkflowsURL() -> URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Jfred/ImportedWorkflows", isDirectory: true)
+    }
+
+    private static func currentImportedWorkflowsURL() -> URL {
+        SupportPaths.directory(syncFolder: "").appendingPathComponent("ImportedWorkflows", isDirectory: true)
+    }
+
+    /// Copies `Application Support/Jfred/ImportedWorkflows` into JfredLocal when
+    /// the new folder has no bundles yet. The old folder is left in place.
+    static func migrateImportedWorkflowsIfNeeded() {
+        let source = legacyImportedWorkflowsURL()
+        let destination = currentImportedWorkflowsURL()
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: source.path) else { return }
+        let destinationBundles = ((try? fm.contentsOfDirectory(at: destination, includingPropertiesForKeys: nil)) ?? []).contains {
+            fm.fileExists(atPath: $0.appendingPathComponent("info.plist").path)
+        }
+        if destinationBundles { return }
+        do {
+            try fm.createDirectory(at: destination, withIntermediateDirectories: true)
+        } catch {
+            return
+        }
+        let entries = (try? fm.contentsOfDirectory(at: source, includingPropertiesForKeys: nil)) ?? []
+        for entry in entries {
+            let target = destination.appendingPathComponent(entry.lastPathComponent)
+            if fm.fileExists(atPath: target.path) { continue }
+            try? fm.copyItem(at: entry, to: target)
+        }
+    }
+
+    /// If `path` lived under the legacy folder and a copy exists in JfredLocal, return the new path.
+    static func relocatedRootPath(_ path: String) -> String? {
+        let source = legacyImportedWorkflowsURL().standardizedFileURL.path
+        let destination = currentImportedWorkflowsURL().standardizedFileURL.path
+        let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
+        guard standardized == source || standardized.hasPrefix(source + "/") else { return nil }
+        let updated = destination + standardized.dropFirst(source.count)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: updated, isDirectory: &isDirectory) else { return nil }
+        return updated
+    }
+
+    static func isManagedImport(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL.path
+        let roots = [currentImportedWorkflowsURL(), legacyImportedWorkflowsURL()].map { $0.standardizedFileURL.path }
+        return roots.contains { path == $0 || path.hasPrefix($0 + "/") }
+    }
+
+    /// Deletes the stored copy of an imported workflow from Jfred's library only.
+    /// Never touches Alfred's own preferences folder.
+    static func deleteImportedCopy(_ workflow: Workflow) {
+        var candidates: [URL] = []
+        if let root = workflow.rootPath, !root.isEmpty {
+            candidates.append(URL(fileURLWithPath: root, isDirectory: true))
+        }
+        for root in [currentImportedWorkflowsURL(), legacyImportedWorkflowsURL()] {
+            let entries = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+            for entry in entries {
+                let info = plist(at: entry.appendingPathComponent("info.plist"))
+                let bundle = info?["bundleid"] as? String
+                if bundle == workflow.bundleID && !workflow.bundleID.isEmpty {
+                    candidates.append(entry)
+                    continue
+                }
+                if let key = workflow.builtin, bundle == key {
+                    candidates.append(entry)
+                }
+            }
+        }
+        var seen = Set<String>()
+        for url in candidates {
+            let path = url.standardizedFileURL.path
+            guard seen.insert(path).inserted else { continue }
+            guard isManagedImport(url) else { continue }
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     @MainActor

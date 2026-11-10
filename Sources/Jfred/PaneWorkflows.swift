@@ -115,9 +115,7 @@ struct WorkflowsPane: View {
                     .frame(width: 24)
                 Button("−") {
                     guard let id = model.selectedWorkflow else { return }
-                    model.workflows.removeAll { $0.id == id }
-                    model.selectedWorkflow = model.workflows.first?.id
-                    model.selectedWorkflowObject = nil
+                    model.removeWorkflow(id)
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 15, weight: .medium))
@@ -157,9 +155,9 @@ struct WorkflowsPane: View {
                     Text(workflow.name)
                         .font(.system(size: 12.5, weight: .semibold))
                         .lineLimit(1)
-                    Text(workflow.author.isEmpty ? "by You" : "by \(workflow.author)")
+                    Text(workflow.isMissingBundle ? "Missing on disk" : (workflow.author.isEmpty ? "by You" : "by \(workflow.author)"))
                         .font(.system(size: 10.5))
-                        .foregroundStyle(.white.opacity(0.62))
+                        .foregroundStyle(workflow.isMissingBundle ? Color.orange.opacity(0.95) : Color.white.opacity(0.62))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -202,11 +200,7 @@ struct WorkflowsPane: View {
         Button("Import Workflow…") { chooseWorkflowToImport() }
         Button("Import from Alfred Library…") { model.importAlfredLibrary() }
         Button("Delete", role: .destructive) {
-            model.workflows.removeAll { $0.id == workflow.id }
-            if model.selectedWorkflow == workflow.id {
-                model.selectedWorkflow = model.workflows.first?.id
-                model.selectedWorkflowObject = nil
-            }
+            model.removeWorkflow(workflow.id)
         }
     }
 
@@ -471,9 +465,7 @@ struct WorkflowEditor: View {
                     Button("Reload Workflows") { model.reloadWorkflowsFromAlfred() }
                     Divider()
                     Button("Delete Workflow", role: .destructive) {
-                        model.workflows.removeAll { $0.id == workflowID }
-                        model.selectedWorkflow = model.workflows.first?.id
-                        model.selectedWorkflowObject = nil
+                        model.removeWorkflow(workflowID)
                     }
                 } label: {
                     Image(systemName: "ellipsis")

@@ -22,6 +22,8 @@ struct DiskState: Codable {
     var knowledge: [String: String]
     var selections: [String: SelectionStat]
 
+    var skippedWorkflowCount = 0
+
     init(preferences: Preferences, workflows: [Workflow], snippets: [Snippet], clips: [ClipItem], usage: [UsageEvent], knowledge: [String: String], selections: [String: SelectionStat]) {
         self.preferences = preferences
         self.workflows = workflows
@@ -30,17 +32,43 @@ struct DiskState: Codable {
         self.usage = usage
         self.knowledge = knowledge
         self.selections = selections
+        self.skippedWorkflowCount = 0
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         preferences = try container.decode(Preferences.self, forKey: .preferences)
-        workflows = try container.decode([Workflow].self, forKey: .workflows)
+        if let lossy = try container.decodeIfPresent(LossyDecodableArray<Workflow>.self, forKey: .workflows) {
+            workflows = lossy.elements
+            skippedWorkflowCount = lossy.skippedIndexes.count
+            for index in lossy.skippedIndexes {
+                let line = "Jfred: skipped unreadable workflow at index \(index) in state.json\n"
+                FileHandle.standardError.write(Data(line.utf8))
+            }
+        } else {
+            workflows = []
+            skippedWorkflowCount = 0
+        }
         snippets = try container.decode([Snippet].self, forKey: .snippets)
         clips = try container.decode([ClipItem].self, forKey: .clips)
         usage = try container.decode([UsageEvent].self, forKey: .usage)
         knowledge = try container.decode([String: String].self, forKey: .knowledge)
         selections = try container.decodeIfPresent([String: SelectionStat].self, forKey: .selections) ?? [:]
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(preferences, forKey: .preferences)
+        try container.encode(workflows, forKey: .workflows)
+        try container.encode(snippets, forKey: .snippets)
+        try container.encode(clips, forKey: .clips)
+        try container.encode(usage, forKey: .usage)
+        try container.encode(knowledge, forKey: .knowledge)
+        try container.encode(selections, forKey: .selections)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case preferences, workflows, snippets, clips, usage, knowledge, selections
     }
 }
 
@@ -1644,7 +1672,15 @@ final class AppModel {
 
     func workflowDirectory(_ workflow: Workflow) -> URL? {
         if let rootPath = workflow.rootPath {
-            return URL(fileURLWithPath: rootPath, isDirectory: true)
+            let url = URL(fileURLWithPath: rootPath, isDirectory: true)
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+                return url
+            }
+            if let relocated = JfredStore.relocatedRootPath(rootPath) {
+                return URL(fileURLWithPath: relocated, isDirectory: true)
+            }
+            return nil
         }
         guard let bundle = workflow.builtin else { return nil }
         let entries = (try? FileManager.default.contentsOfDirectory(at: JfredStore.importedWorkflowsURL(), includingPropertiesForKeys: nil)) ?? []
@@ -1681,6 +1717,22 @@ final class AppModel {
         importNote = "Imported \(count) workflows from Alfred."
         section = .workflows
         showPreferences()
+    }
+
+    func removeWorkflow(_ id: UUID) {
+        guard let workflow = workflows.first(where: { $0.id == id }) else { return }
+        JfredStore.deleteImportedCopy(workflow)
+        workflows.removeAll { $0.id == id }
+        if selectedWorkflow == id {
+            selectedWorkflow = workflows.first?.id
+            selectedWorkflowObject = nil
+        }
+        if editingWorkflowID == id {
+            editingWorkflowID = nil
+            workflowConfigPresented = false
+            workflowConfigSnapshot = nil
+        }
+        workflowsChanged()
     }
 
     func duplicateWorkflow(_ id: UUID) {
@@ -2487,26 +2539,52 @@ final class AppModel {
         return url
     }
 
-    private func load() {
-        hardenSupportFolder()
-        let url = supportDirectory().appendingPathComponent("state.json")
-        guard let data = try? Data(contentsOf: url), let state = try? JSONDecoder().decode(DiskState.self, from: data) else {
-            preferences = Preferences()
-            workflows = Seed.workflows()
-            snippets = Seed.snippets()
-            finishJfredStore()
-            return
-        }
+    private var canReplaceStateBackup = false
+    private var canOverwriteStateFile = true
+
+    private func readDiskState(from url: URL) -> DiskState? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(DiskState.self, from: data)
+    }
+
+    private func applyDiskState(_ state: DiskState) {
         preferences = state.preferences
-        let legacyBuiltins: Set<String> = ["dev", "epoch", "unit", "kill", "tabs", "profiles", "windows", "ui"]
-        workflows = state.workflows.filter { workflow in
-            workflow.builtin.map { !legacyBuiltins.contains($0) } ?? true
-        }
+        workflows = state.workflows.filter { !WorkflowSync.isLegacyPlaceholder($0) }
         snippets = state.snippets
         clips = state.clips
         usage = state.usage
         knowledge = state.knowledge
         selections = state.selections
+        let allSkipped = state.skippedWorkflowCount > 0 && state.workflows.isEmpty
+        canReplaceStateBackup = !allSkipped
+        canOverwriteStateFile = !allSkipped
+    }
+
+    private func load() {
+        hardenSupportFolder()
+        JfredStore.migrateImportedWorkflowsIfNeeded()
+        let directory = supportDirectory()
+        let url = directory.appendingPathComponent("state.json")
+        let backup = directory.appendingPathComponent("state.json.bak")
+        if let state = readDiskState(from: url) {
+            applyDiskState(state)
+            finishJfredStore()
+            return
+        }
+        if let state = readDiskState(from: backup) {
+            let line = "Jfred: state.json was unreadable; loaded workflows from state.json.bak\n"
+            FileHandle.standardError.write(Data(line.utf8))
+            applyDiskState(state)
+            finishJfredStore()
+            return
+        }
+        preferences = Preferences()
+        workflows = Seed.workflows()
+        snippets = Seed.snippets()
+        canReplaceStateBackup = false
+        // Do not overwrite an existing unreadable state.json or a good backup
+        // with a seed state. First launch (no file yet) may still write.
+        canOverwriteStateFile = !FileManager.default.fileExists(atPath: url.path)
         finishJfredStore()
     }
 
@@ -2557,7 +2635,19 @@ final class AppModel {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(state) else { return }
-        try? data.write(to: supportDirectory().appendingPathComponent("state.json"), options: .atomic)
+        let directory = supportDirectory()
+        let destination = directory.appendingPathComponent("state.json")
+        let backup = directory.appendingPathComponent("state.json.bak")
+        let current = try? Data(contentsOf: destination)
+        if !canOverwriteStateFile, current != nil { return }
+        if StateFile.shouldUpdateBackup(current: current, newWorkflowCount: state.workflows.count, allowed: canReplaceStateBackup) {
+            try? current?.write(to: backup, options: .atomic)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: backup.path)
+        }
+        try? data.write(to: destination, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: destination.path)
+        canReplaceStateBackup = true
+        canOverwriteStateFile = true
     }
 
     private func refreshStatusItem() {
