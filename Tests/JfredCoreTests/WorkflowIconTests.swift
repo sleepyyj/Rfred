@@ -178,6 +178,68 @@ import Testing
         }
     }
 
+    @Test func typelessPDFIconLoadsAsArtworkNotWorkspaceIcon() throws {
+        try withTempWorkflow { root in
+            touch(root.appendingPathComponent("icon.png"))
+            let base64 = root.appendingPathComponent("base64.pdf")
+            let url = root.appendingPathComponent("url.pdf")
+            let html = root.appendingPathComponent("html.pdf")
+            touch(base64)
+            touch(url)
+            touch(html)
+
+            #expect(WorkflowIcon.resolve(path: "base64.pdf", workflowRoot: root.path) == .image(base64.path))
+            #expect(WorkflowIcon.resolve(path: "url.pdf", workflowRoot: root.path) == .image(url.path))
+            #expect(WorkflowIcon.resolve(path: "html.pdf", workflowRoot: root.path) == .image(html.path))
+            #expect(WorkflowIcon.isImagePath(base64.path))
+
+            // fileicon still means the Finder document icon, even for a PDF.
+            let fileicon = WorkflowIcon.resolve(
+                path: "base64.pdf",
+                type: "fileicon",
+                workflowRoot: root.path
+            )
+            #expect(fileicon == .fileIcon(base64.path))
+        }
+    }
+
+    @Test func endToEndDevToysEncodeShape() throws {
+        try withTempWorkflow { root in
+            touch(root.appendingPathComponent("icon.png"))
+            let base64 = root.appendingPathComponent("base64.pdf")
+            let url = root.appendingPathComponent("url.pdf")
+            let html = root.appendingPathComponent("html.pdf")
+            touch(base64)
+            touch(url)
+            touch(html)
+
+            // DevToys encode shape: JSON items with empty titles and typeless
+            // relative PDF icon paths in the workflow directory.
+            let json = """
+            {"items":[
+              {"title":"","subtitle":"⌘+L, ↩ Copy Base64 Encode","arg":"","icon":{"path":"base64.pdf"}},
+              {"title":"","subtitle":"⌘+L, ↩ Copy URL Encode","arg":"","icon":{"path":"url.pdf"}},
+              {"title":"","subtitle":"⌘+L, ↩ Copy HTML Encode","arg":"","icon":{"path":"html.pdf"}}
+            ]}
+            """
+            let items = WorkflowScriptFilterParser.parse(json).items
+            #expect(items.map(\.title) == ["", "", ""])
+            #expect(items.map(\.iconPath) == ["base64.pdf", "url.pdf", "html.pdf"])
+            #expect(items.map(\.iconType) == ["", "", ""])
+
+            let icons = items.map {
+                WorkflowIcon.resolve(
+                    path: $0.iconPath,
+                    type: $0.iconType,
+                    workflowRoot: root.path,
+                    workflowSymbol: "puzzlepiece.extension"
+                )
+            }
+            #expect(icons == [.image(base64.path), .image(url.path), .image(html.path)])
+            #expect(icons.allSatisfy { $0.resource.hasPrefix("image:") })
+        }
+    }
+
     @Test func endToEndEpochAndUnitConverterShapes() throws {
         try withTempWorkflow { root in
             let workflowIcon = root.appendingPathComponent("icon.png")

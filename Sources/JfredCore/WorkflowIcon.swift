@@ -25,7 +25,7 @@ public enum WorkflowIconRef: Equatable, Sendable {
 /// Resolves the many icon forms imported workflows emit into a single ref.
 public enum WorkflowIcon {
     public static let imageExtensions: Set<String> = [
-        "icns", "png", "jpg", "jpeg", "gif", "tif", "tiff", "webp", "bmp", "heic", "heif"
+        "icns", "png", "jpg", "jpeg", "gif", "tif", "tiff", "webp", "bmp", "heic", "heif", "pdf", "svg"
     ]
 
     public static func isImagePath(_ path: String) -> Bool {
@@ -88,7 +88,7 @@ public enum WorkflowIcon {
                     if FileManager.default.fileExists(atPath: candidate) { return .image(candidate) }
                 }
             }
-            for name in ["icon.png", "icon.icns", "icon.jpg", "icon.jpeg"] {
+            for name in ["icon.png", "icon.icns", "icon.jpg", "icon.jpeg", "icon.pdf"] {
                 let candidate = URL(fileURLWithPath: root, isDirectory: true)
                     .appendingPathComponent(name).path
                 if FileManager.default.fileExists(atPath: candidate) { return .image(candidate) }

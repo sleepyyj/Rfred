@@ -23,7 +23,7 @@ enum WorkflowRuntime {
             let suffix = item.uid.isEmpty ? String(index) : item.uid
             return SearchResult(
                 id: "wf:\(match.workflow.id.uuidString):\(match.input.id.uuidString):\(suffix)",
-                title: item.title.isEmpty ? match.workflow.name : item.title,
+                title: item.title,
                 subtitle: item.subtitle.isEmpty ? match.workflow.details : item.subtitle,
                 icon: icon(for: item, workflow: match.workflow, objectUID: match.input.alfredUID),
                 kind: "workflow",
