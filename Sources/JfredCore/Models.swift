@@ -157,10 +157,6 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var pasteDelayMs: Int
     public var terminalApp: String
     public var fileSearchMax: Int
-    public var remoteEnabled: Bool
-    public var remoteLocalOnly: Bool
-    public var remoteToken: String
-    public var remotePort: Int
     public var autoUpdateCheck: String
     public var recentQueries: [String]
     public var lastQueryDate: Date?
@@ -333,10 +329,6 @@ public struct Preferences: Codable, Equatable, Sendable {
         pasteDelayMs = 80
         terminalApp = "iTerm"
         fileSearchMax = 20
-        remoteEnabled = false
-        remoteLocalOnly = true
-        remoteToken = UUID().uuidString.prefix(8).lowercased() + UUID().uuidString.prefix(4).lowercased()
-        remotePort = 8910
         autoUpdateCheck = "updates"
         recentQueries = []
         lastQueryDate = nil
@@ -437,7 +429,7 @@ public struct Preferences: Codable, Equatable, Sendable {
         case syncFolder, snippetsEnabled, clipboardEnabled, clipboardLimit
         case calculatorEnabled, dictionaryEnabled, onePasswordEnabled
         case largeTypeSize, largeTypeFont, quickLookEnabled, pasteDelayMs, terminalApp, fileSearchMax
-        case remoteEnabled, remoteLocalOnly, remoteToken, remotePort, autoUpdateCheck
+        case autoUpdateCheck
         case recentQueries, lastQueryDate, newsletterEmail, safariBookmarks, chromeBookmarks
         case fileBufferEnabled
         case quickSearchEnabled, fileOpenKeyword, fileFindKeyword, fileInsideKeyword
@@ -518,10 +510,6 @@ public struct Preferences: Codable, Equatable, Sendable {
         pasteDelayMs = value(.pasteDelayMs, d.pasteDelayMs)
         terminalApp = value(.terminalApp, d.terminalApp)
         fileSearchMax = value(.fileSearchMax, d.fileSearchMax)
-        remoteEnabled = value(.remoteEnabled, d.remoteEnabled)
-        remoteLocalOnly = value(.remoteLocalOnly, d.remoteLocalOnly)
-        remoteToken = value(.remoteToken, d.remoteToken)
-        remotePort = value(.remotePort, d.remotePort)
         autoUpdateCheck = value(.autoUpdateCheck, d.autoUpdateCheck)
         recentQueries = value(.recentQueries, d.recentQueries)
         lastQueryDate = value(.lastQueryDate, d.lastQueryDate)
@@ -763,7 +751,7 @@ public struct UsageEvent: Codable, Equatable, Sendable {
         self.category = category
     }
 
-    public static let categories = ["general", "expansion", "clipboard", "navigation", "action", "remote", "hotkeys"]
+    public static let categories = ["general", "expansion", "clipboard", "navigation", "action", "hotkeys"]
 }
 
 public struct AppRecord: Codable, Equatable, Sendable, Identifiable {

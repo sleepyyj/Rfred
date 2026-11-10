@@ -99,7 +99,7 @@
 - Music Mini Player 已有独立窗口与曲目搜索，但没有唱片封面、播放列表/专辑浏览和随机播放逻辑。
 - Appearance 已支持 `.alfredappearance` 导入/导出、自定义主题编辑/删除；仍没有 Alfred 的逐控件主题调试器。
 - Workflows 的节点自由连线、对象库、断点/单步调试仍是结构级；空态、列表、导入、模板、基础画布、Inspector、拖拽重排与顺序 Debugger 已对齐。
-- Remote 的私有 iOS 配对协议、Powerpack/Help 的完整内容仍是结构级（QR 配对面板已有）。
+- Powerpack 与 Remote 已从产品中移除；Help 的完整内容仍是结构级。Alfred 的私有 iOS 配对协议不做。
 - Alfred 的手绘图标/主题壁纸没有复制（版权与独立性考虑），Jfred 用 SF Symbols + 同色块。
 - 少数 Alfred 选项只落了 UI 与偏好字段，未逐一接行为（例如 File Buffer 的 Shift+Option 变体、Snippets 的完整 Auto Expansion 子选项、Calculator 的高级函数全集）。
 - 像素级字体/间距仍有 1–3pt 级差异；REA 证据给出的是 frame 与颜色，不是渲染后的字形度量。
@@ -120,16 +120,21 @@ open build/Jfred.app
 
 | 检查项 | 状态 |
 | --- | --- |
-| 偏好设置 10 个 section | 已完成：General / Features / Workflows / Appearance / Remote / Advanced / Powerpack / Usage / Help / Update |
+| 偏好设置 section | 现为 8 个：General / Features / Workflows / Appearance / Advanced / Usage / Help / Update（Powerpack 与 Remote 已移除） |
 | Features 16 页 | 已完成：Default Results、File Search、Universal Actions、Web Search、Web Bookmarks、Clipboard、Snippets、Calculator、Dictionary、Contacts、Music、1Password、System、Terminal、Large Type、Previews |
 | 启动器 | 已完成：Alfred 主题指标、10 套主题、Action Panel、Universal Actions、Alfred 结果行/搜索框尺寸 |
 | Workflows | 已完成：Alfred 对象图导入、Script Filter/List Filter、条件分支、运行脚本、画布节点、连接编辑、Inspector、Run/Step/Debugger、断点 |
 | Clipboard / Snippets | 已完成：三类独立保留、Ignore Apps、Clear Keyword、Snippets 整合、Auto Expansion |
 | Contacts / Music | 已完成：搜索、Open/Email/Call/Maps、显示选项、Mini Player、播放列表、封面 |
 | Themes | 已完成：导入/导出 `.alfredappearance`、自定义主题编辑、删除、实时预览 |
-| Remote | 已完成：本地 HTTP 页面、分类动作、QR 配对、token 轮换、CSP/Host 校验；私有 iOS 协议不做 |
+| Remote / Powerpack | 已从产品中移除：不再提供本地 HTTP 服务、token/QR 配对或 Powerpack 说明页 |
 | 安全审计 | 9 项修复，文档见 `security-audit.md` |
 | 自动化测试 | 20 个，`./scripts/test.sh` 全部通过 |
+
+
+### 后续变更
+
+- Powerpack 与 Remote 已从产品中完全移除。偏好设置不再包含这两页；不再启动 HTTP 监听，也不再生成、存储或展示 Remote token / QR 配对。旧 `state.json` 中的 `remoteEnabled` / `remoteLocalOnly` / `remoteToken` / `remotePort` 在解码时会被忽略，下次保存时不再写出。Alfred 工作流取样文中的 “Powerpack 已启用” 仍指 Alfred 许可状态，不是 Jfred 模块。
 
 ### 已知限制
 

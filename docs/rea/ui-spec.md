@@ -107,8 +107,8 @@ Jfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern�
 ## 已知未对齐
 
 - Music Mini Player 已有独立暗色面板（420×560）、当前曲目专辑封面与播放列表搜索；没有完整的专辑/播放列表浏览。
-- Remote 已有本地 URL 的 QR 配对面板；Alfred 的私有 iOS 配对协议明确不做。
-- Powerpack/Help 只保留功能清单与本机排障，不再逐字复刻 Alfred 营销页。
-- Appearance 的实时主题预览、Remote 的 iOS 配对协议、Powerpack/Help 的营销与诊断内容只做了结构级对齐。
+- Powerpack 与 Remote 已从产品中移除，不再提供说明页、本地 HTTP 服务或 QR 配对；Alfred 的私有 iOS 配对协议本来就不做。
+- Help 只保留本机排障与诊断，不再逐字复刻 Alfred 营销页。
+- Appearance 的实时主题预览、Help 的诊断内容只做了结构级对齐。
 - Workflows 已按 Alfred 对象图实现导入、画布、条件分支和调试器；端口拖拽画线与私有 Automation Task 仍未实现。
 - Alfred 的部分图标为手绘位图，Jfred 使用 SF Symbols + 同色块，形状不同。

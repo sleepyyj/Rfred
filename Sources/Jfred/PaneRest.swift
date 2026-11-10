@@ -1,6 +1,5 @@
 import SwiftUI
 import JfredCore
-import CoreImage.CIFilterBuiltins
 import UniformTypeIdentifiers
 
 struct AppearancePane: View {
@@ -239,161 +238,6 @@ private struct ThemeThumbnail: View {
     }
 }
 
-struct RemotePane: View {
-    var model: AppModel
-    var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                ForEach(RemoteCategory.allCases) { category in
-                    Button { model.remoteCategory = category } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: category.symbol).frame(width: 22)
-                            VStack(alignment: .leading) {
-                                Text(category.title).font(.system(size: 13, weight: .semibold))
-                                Text(category.subtitle).font(.system(size: 11)).foregroundStyle(.white.opacity(0.82))
-                            }
-                            Spacer()
-                        }
-                        .padding(8)
-                        .foregroundStyle(.white)
-                        .background(model.remoteCategory == category ? Color.white.opacity(0.22) : Color.clear)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer()
-            }
-            .frame(width: 240)
-            .jfredSidebar(tint: JfredColor.sidebarDeep)
-            ZStack {
-                Color(hex: 0x161616)
-                VStack(spacing: 18) {
-                    ZStack {
-                        HoodMark().frame(width: 180, height: 140)
-                        Image(systemName: "wave.3.right")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.white.opacity(0.25))
-                            .offset(x: 70, y: -30)
-                    }
-                    Text(model.preferences.remoteEnabled ? "Remote server is running" : "Enable Remote Server")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.85))
-                    if model.preferences.remoteEnabled {
-                        Text(model.remoteWarning.isEmpty ? "http://127.0.0.1:\(model.preferences.remotePort)/?token=\(model.preferences.remoteToken)" : model.remoteWarning)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.82))
-                            .textSelection(.enabled)
-                    }
-                }
-            }
-            VStack(alignment: .leading, spacing: 12) {
-                Toggle("Enable Jfred Remote Server", isOn: model.bindPref(\.remoteEnabled))
-                    .padding(.top, 18)
-                Text(model.preferences.remoteEnabled ? "Server running" : "Server Stopped")
-                    .frame(maxWidth: .infinity)
-                    .foregroundStyle(.secondary)
-                Text(model.preferences.remoteLocalOnly ? "127.0.0.1" : "All interfaces")
-                    .frame(maxWidth: .infinity)
-                    .foregroundStyle(.secondary)
-                Toggle("This Mac only", isOn: model.bindPref(\.remoteLocalOnly))
-                if !model.preferences.remoteLocalOnly {
-                    Text("Warning: the token is sent over plain HTTP on your network. Use this only on a trusted network.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Stepper("Port \(model.preferences.remotePort)", value: model.bindPref(\.remotePort), in: 1024...65535)
-                Text("Token \(model.preferences.remoteToken)")
-                    .font(.system(size: 12, design: .monospaced))
-                    .textSelection(.enabled)
-                Button("Regenerate Token") { model.regenerateRemoteToken() }
-                    .controlSize(.small)
-                Spacer()
-                VStack(spacing: 8) {
-                    Text("Jfred Remote for iOS")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("This local page is your command centre. It stays on this Mac and asks for the token above.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                    Button("Add iOS Remote…") { model.showRemoteQR = true }
-                        .disabled(!model.preferences.remoteEnabled)
-                    Button("Open Remote Page") {
-                        let url = "http://127.0.0.1:\(model.preferences.remotePort)/?token=\(model.preferences.remoteToken)"
-                        if let link = URL(string: url) { NSWorkspace.shared.open(link) }
-                    }
-                    .disabled(!model.preferences.remoteEnabled)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 16)
-            }
-            .padding(.horizontal, 16)
-            .frame(width: 280)
-            .background(Color.white)
-        }
-        .sheet(isPresented: model.bind(\.showRemoteQR)) {
-            RemoteQRCode(url: "http://127.0.0.1:\(model.preferences.remotePort)/?token=\(model.preferences.remoteToken)") {
-                model.showRemoteQR = false
-            }
-        }
-    }
-}
-
-struct RemoteQRCode: View {
-    var url: String
-    var done: () -> Void
-
-    private var image: NSImage? {
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(url.utf8)
-        filter.correctionLevel = "M"
-        guard let output = filter.outputImage else { return nil }
-        let scaled = output.transformed(by: CGAffineTransform(scaleX: 8, y: 8))
-        let rep = NSCIImageRep(ciImage: scaled)
-        let image = NSImage(size: rep.size)
-        image.addRepresentation(rep)
-        return image
-    }
-
-    var body: some View {
-        VStack(spacing: 14) {
-            Text("Add Jfred Remote")
-                .font(.system(size: 18, weight: .semibold))
-            Text("Scan this code from the Jfred Remote page on your iPhone, or copy the URL below.")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 320)
-            if let image {
-                Image(nsImage: image)
-                    .interpolation(.none)
-                    .resizable()
-                    .frame(width: 220, height: 220)
-                    .padding(10)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white))
-            } else {
-                Text("Could not generate the QR code.")
-                    .foregroundStyle(.red)
-            }
-            Text(url)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-                .lineLimit(3)
-                .multilineTextAlignment(.center)
-            HStack {
-                Button("Copy URL") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(url, forType: .string)
-                }
-                Button("Done") { done() }.keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(24)
-        .frame(width: 420)
-    }
-}
-
 struct AdvancedPane: View {
     var model: AppModel
     var body: some View {
@@ -598,7 +442,6 @@ func usageColor(_ category: String) -> Color {
     case "clipboard": Color(hex: 0xC47A4A)
     case "navigation": Color(hex: 0xD15BA0)
     case "action": Color(hex: 0xC6C14A)
-    case "remote": Color(hex: 0x3A74D8)
     default: Color(hex: 0x8FCE4A)
     }
 }
@@ -716,63 +559,6 @@ struct UpdatePane: View {
     }
 }
 
-struct PowerpackPane: View {
-    var model: AppModel
-
-    var body: some View {
-        VStack(spacing: 0) {
-            PageHeaderBand(
-                icon: "bolt.fill",
-                tint: Color(hex: 0x4F217A),
-                title: "Powerpack",
-                subtitle: "The extra features that make Jfred a full launcher."
-            )
-            PageSurface {
-                FormPanel {
-                    VStack(alignment: .leading, spacing: 18) {
-                        Text("Jfred includes the Powerpack feature set locally")
-                            .font(.system(size: 18, weight: .semibold))
-                        Text("Clipboard History, Snippets, File Search, Universal Actions, Workflows, Themes, Remote and Large Type are available without a separate purchase. Jfred is an independent, local project and is not affiliated with Running with Crayons.")
-                            .font(.system(size: 13))
-                            .foregroundStyle(JfredColor.sub)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Divider()
-                        LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], spacing: 10) {
-                            powerItem("Clipboard History", "list.clipboard")
-                            powerItem("Snippets", "note.text")
-                            powerItem("File Search", "doc.text.magnifyingglass")
-                            powerItem("Universal Actions", "arrow.right.square")
-                            powerItem("Workflows", "square.grid.2x2")
-                            powerItem("Themes", "paintbrush.fill")
-                            powerItem("Remote", "antenna.radiowaves.left.and.right")
-                            powerItem("Large Type", "textformat.size")
-                        }
-                        Divider()
-                        HStack {
-                            Text("Version \(AppRelease.version)")
-                                .font(.system(size: 12))
-                                .foregroundStyle(JfredColor.sub)
-                            Spacer()
-                            Button("Open Help") { model.section = .help }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func powerItem(_ title: String, _ symbol: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(.system(size: 13))
-                .foregroundStyle(Color(hex: 0x4F217A))
-                .frame(width: 20)
-            Text(title).font(.system(size: 12.5))
-            Spacer(minLength: 0)
-        }
-    }
-}
-
 struct HelpPane: View {
     var model: AppModel
 
@@ -789,7 +575,6 @@ struct HelpPane: View {
         Topic(title: "Clipboard history is empty", detail: "Check that Clipboard History is enabled, that the source app is not in Ignore Apps, and that the item was not marked Concealed or Auto Generated. Password managers are deliberately excluded."),
         Topic(title: "Snippets do not expand", detail: "Auto expansion needs Accessibility permission. Keep the snippet keyword unique and make sure the snippet is enabled and its collection is not filtered out."),
         Topic(title: "A workflow does not run", detail: "Imported workflows run their own scripts with the same permissions as Jfred. Check the workflow's script interpreter, its working directory, and the shell PATH. Use the workflow Debugger to see the first failing action."),
-        Topic(title: "Remote page cannot connect", detail: "Enable the server, keep This Mac only on unless you need LAN access, and use the exact token from the Remote pane. If a token or QR code leaked, press Regenerate Token."),
         Topic(title: "Theme import or export failed", detail: "Theme files are .alfredappearance JSON. Jfred reads the window/search/result fields and ignores unknown keys. Export produces a compatible file; importing a broken file leaves the current theme unchanged."),
         Topic(title: "File search is slow", detail: "Reduce Search Scope, turn off Search all file types, or disable unnecessary Extras. Use the open, find, in and tags keywords instead of searching every file in the default results."),
     ]
@@ -862,7 +647,6 @@ struct HelpPane: View {
             "Workflows: \(model.workflows.count)",
             "Snippets: \(model.snippets.count)",
             "Clipboard items: \(model.clips.count)",
-            "Remote enabled: \(model.preferences.remoteEnabled)",
         ]
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)

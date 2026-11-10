@@ -61,9 +61,7 @@ struct PreferencesShell: View {
             case .features: FeaturesPane(model: model)
             case .workflows: WorkflowsPane(model: model)
             case .appearance: AppearancePane(model: model)
-            case .remote: RemotePane(model: model)
             case .advanced: AdvancedPane(model: model)
-            case .powerpack: PowerpackPane(model: model)
             case .usage: UsagePane(model: model)
             case .help: HelpPane(model: model)
             case .update: UpdatePane(model: model)
@@ -74,8 +72,8 @@ struct PreferencesShell: View {
 
 struct IconRail: View {
     var model: AppModel
-    private var top: [PrefSection] { [.general, .features, .workflows, .appearance, .remote, .advanced] }
-    private var bottom: [PrefSection] { [.powerpack, .usage, .help, .update] }
+    private var top: [PrefSection] { [.general, .features, .workflows, .appearance, .advanced] }
+    private var bottom: [PrefSection] { [.usage, .help, .update] }
 
     var body: some View {
         VStack(spacing: 0) {

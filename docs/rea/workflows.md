@@ -95,9 +95,9 @@ Keyword、Script Filter、List Filter、Run Script、AppleScript、Open URL、Op
 已知差异：对象图标仍用 SF Symbols，不复制 Alfred 的手绘对象图标；窗口字体渲染与 Alfred 的 AppKit 控件存在 1–2pt 级差异。
 
 
-## 5.8.1 实机取样（Powerpack 已启用）
+## 5.8.1 实机取样（Alfred Powerpack 已启用）
 
-Powerpack 启用后直接对 Alfred Preferences 的 Workflows 窗口取样（窗口 1422×860，截图为 2x Retina），把下面这些值写进 Jfred：
+在 Alfred Powerpack 启用后直接对 Alfred Preferences 的 Workflows 窗口取样（窗口 1422×860，截图为 2x Retina），把下面这些值写进 Jfred：
 
 | 项目 | 实测值 |
 | --- | --- |

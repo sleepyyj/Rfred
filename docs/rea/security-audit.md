@@ -6,7 +6,7 @@
 
 ## 结论
 
-没有发现主动外传数据的遥测、分析或第三方 SDK。唯一的网络监听是用户显式开启的 Local Remote HTTP 服务；唯一的外部进程调用是用户命令、工作流、Terminal/AppleScript、`mdfind`、`op` 等本机工具。审计中发现并修复了 9 个可被利用或会泄露本地数据的问题，剩余风险主要来自「用户主动开启的远程页面」和「工作流本身就是可执行代码」这两类设计。
+没有发现主动外传数据的遥测、分析或第三方 SDK。当前版本已移除 Powerpack 与 Remote 模块，不再提供本地 HTTP 监听、token 或 QR 配对。唯一的外部进程调用是用户命令、工作流、Terminal/AppleScript、`mdfind`、`op` 等本机工具。审计中发现并修复了 9 个可被利用或会泄露本地数据的问题；与 Remote 相关的攻击面已随模块移除，剩余风险主要来自「工作流本身就是可执行代码」这类设计。
 
 ## 已修复
 
@@ -24,14 +24,13 @@
 
 ## 仍然存在 / 已接受的风险
 
-1. **Remote 使用明文 HTTP。** 当用户关闭 “This Mac only” 时，token 会在局域网中以明文传输。已在 UI 显示红色警告，默认仍是仅本机。需要跨设备使用时，建议只在自己信任的网络，或后续改成 TLS/配对码。
-2. **Remote token 会出现在 URL/QR 中。** 用户主动打开 “Add iOS Remote” 时会显示含 token 的二维码；截图或投屏会泄露 token。Remote 页已提供 “Regenerate Token”，可立即作废旧链接并重启服务。
-3. **Clipboard 历史是明文数据库。** 已用 0600 限制本机其他用户读取，但没有加密。若把 `syncFolder` 指向 iCloud/Dropbox 等同步目录，历史会随云同步；UI 已提示可退出清空。
-4. **工作流可以执行任意 shell / AppleScript。** 这是 Alfred 兼容工作流的固有能力，不是漏洞；只应导入可信来源的 `.alfredworkflow`。导入路径已做 zip-slip 校验，但没有沙箱化脚本执行。
-5. **AppleScript / Terminal 是用户显式触发的。** `>` 前缀、Terminal 动作、工作流脚本都会执行用户输入；这是功能本身。已对唯一可被远程触发的 `volume:` 做数值校验。
-6. **Universal Actions 只在明确前台上下文读取选择。** 选中文本通过 AX `kAXSelectedText` 读取；Finder 文件列表只在 Finder 为前台进程时通过 AppleScript 读取，避免在任意 App 上触发无关的 Automation 授权提示。
-7. **Accessibility / Automation / Contacts 权限较大。** 这些权限用于窗口命令、浏览器标签、联系人搜索；不授权时对应功能会返回空结果，不会崩溃。
-8. **REA/Hopper 逆向仅用于本机互操作。** 没有把 Alfred 的资源、nib、字符串表或反编译代码放进仓库；合规边界见 `docs/rea/README.md`。
+1. **Remote 明文 HTTP 与 token/QR 泄露。** 已随 Remote 模块移除，不再适用。旧 `state.json` 中的 remote* 字段解码时忽略，保存时不再写出。
+2. **Clipboard 历史是明文数据库。** 已用 0600 限制本机其他用户读取，但没有加密。若把 `syncFolder` 指向 iCloud/Dropbox 等同步目录，历史会随云同步；UI 已提示可退出清空。
+3. **工作流可以执行任意 shell / AppleScript。** 这是 Alfred 兼容工作流的固有能力，不是漏洞；只应导入可信来源的 `.alfredworkflow`。导入路径已做 zip-slip 校验，但没有沙箱化脚本执行。
+4. **AppleScript / Terminal 是用户显式触发的。** `>` 前缀、Terminal 动作、工作流脚本都会执行用户输入；这是功能本身。已对 `volume:` 做数值校验（原先也可被已移除的 Remote `/run` 触发）。
+5. **Universal Actions 只在明确前台上下文读取选择。** 选中文本通过 AX `kAXSelectedText` 读取；Finder 文件列表只在 Finder 为前台进程时通过 AppleScript 读取，避免在任意 App 上触发无关的 Automation 授权提示。
+6. **Accessibility / Automation / Contacts 权限较大。** 这些权限用于窗口命令、浏览器标签、联系人搜索；不授权时对应功能会返回空结果，不会崩溃。
+7. **REA/Hopper 逆向仅用于本机互操作。** 没有把 Alfred 的资源、nib、字符串表或反编译代码放进仓库；合规边界见 `docs/rea/README.md`。
 
 ## 隐私数据清单
 
@@ -39,7 +38,7 @@
 | --- | --- | --- |
 | 剪贴板历史 | `~/Library/Application Support/JfredLocal/state.json` + `ClipImages/` | 0600/0700，屏蔽密码管理器，可退出清空 |
 | 联系人姓名/邮箱/电话/职位 | 内存，运行时从 Contacts 读取 | 不写入 state.json；不读取 note（需要额外 entitlement） |
-| Remote token | `state.json`、Remote QR 面板 | 0600，32 hex，常量时间比较，可一键轮换 |
+| Remote token（历史） | 曾写入 `state.json` 并显示在 Remote QR 面板 | 模块已移除；旧字段解码时忽略，不再写出 |
 | 书签/浏览器标签/Chrome profile | 运行时读取 | 仅用于搜索结果，不写盘 |
 | 搜索历史/使用统计 | `state.json` | 0600，可关闭 `showLatestQuery`，Help 可清除 |
 | Newsletter 邮箱 | `state.json` | 仅本地保存，Subscribe 按钮不发送网络请求 |
@@ -48,7 +47,7 @@
 ## 最终扫描
 
 - `Sources/` 与 `Info.plist` 中没有 `URLSession`、`NSURLConnection`、`NSAllowsArbitraryLoads`；外部 URL 只由用户配置的 Web Search / Contacts / 主题/工作流按钮打开。
-- 唯一监听是 Remote 的 `127.0.0.1` HTTP 服务（或用户显式关闭 This Mac only）。
+- 已无本地网络监听：Remote HTTP 服务已随模块移除。
 - 支持目录、state.json、ClipImages 全部 0700/0600。
 - 未发现新的强制解包；workflow/theme 编辑器绑定均带 fallback/边界检查。
 
@@ -61,9 +60,11 @@ swift build
 open build/Jfred.app
 ```
 
-运行验证覆盖：偏好设置窗口、Features 16 页、Contacts/Music 新页面、Remote 页面启动、剪贴板轮询、联系人权限按需申请（不在启动时弹窗）。
+运行验证覆盖：偏好设置窗口、Features 16 页、Contacts/Music 新页面、剪贴板轮询、联系人权限按需申请（不在启动时弹窗）。
 
-Remote 头验证（本机 127.0.0.1:8910）：
+下文 Remote 头验证记录的是模块移除前的审计结果，当前版本不再启动该监听。
+
+Remote 头验证（本机 127.0.0.1:8910，历史）：
 
 ```text
 GET  /?token=<32hex>            -> 200，含 CSP / nosniff / Referrer-Policy
@@ -72,4 +73,4 @@ POST /?token=<32hex>            -> 405 Method Not Allowed, Allow: GET
 Regenerate Token then old URL  -> 403/token-required; new URL -> 200
 ```
 
-Token 轮换已在运行中的服务上验证：旧 token 立即失效，新 token 正常返回页面；测试后已关闭 Remote 监听。
+Token 轮换曾在运行中的服务上验证：旧 token 立即失效，新 token 正常返回页面；测试后已关闭 Remote 监听。该服务现已从产品中移除。

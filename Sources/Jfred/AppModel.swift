@@ -99,7 +99,6 @@ final class AppModel {
     var apps: [AppRecord] = []
     var links: [LinkRecord] = []
     var actionsTab = "General"
-    var showRemoteQR = false
     var showSnippetExpansionOptions = false
     var workflowSelection: Int? = nil
     var workflowDragIndex: Int? = nil
@@ -155,7 +154,6 @@ final class AppModel {
     var fileBuffer: [SearchResult] = []
     var hotkeyWarning = ""
     var hotkeyFieldFocused = false
-    var remoteWarning = ""
     var debugLine = "Debugger Stopped"
     var prefsQuery = ""
     var fileSearchTab = "Search"
@@ -169,7 +167,6 @@ final class AppModel {
     var selectedWebSearchID: String?
     var section: PrefSection = .general
     var feature: FeatureID = .defaultResults
-    var remoteCategory: RemoteCategory = .system
     var selectedWorkflow: UUID?
     var focusToken = 0
     var featureSheet: FeatureSheet?
@@ -216,7 +213,6 @@ final class AppModel {
     private var previousApp: NSRunningApplication?
     private var saveWork: DispatchWorkItem?
     var launcher: LauncherController?
-    let remote = RemoteServer()
     private var didStart = false
     private var suppressPrompts: Bool {
         ProcessInfo.processInfo.environment["JLFRED_LOCAL_NO_PROMPTS"] == "1"
@@ -235,7 +231,6 @@ final class AppModel {
             applyLoginItem()
             applyExpander()
         }
-        applyRemote()
         reindex()
         reloadLinks()
         if preferences.onePasswordEnabled { reloadOnePassword() }
@@ -1111,9 +1106,6 @@ final class AppModel {
         if old.hotkey != preferences.hotkey || old.clipboardEnabled != preferences.clipboardEnabled { applyHotkeys() }
         if old.launchAtLogin != preferences.launchAtLogin { applyLoginItem() }
         if old.snippetsEnabled != preferences.snippetsEnabled { applyExpander() }
-        if old.remoteEnabled != preferences.remoteEnabled || old.remotePort != preferences.remotePort || old.remoteLocalOnly != preferences.remoteLocalOnly || old.remoteToken != preferences.remoteToken {
-            applyRemote()
-        }
         let appRootsChanged = old.scopePaths != preferences.scopePaths || old.includeSystemApps != preferences.includeSystemApps || old.includeUserApps != preferences.includeUserApps || old.includePreferencePanes != preferences.includePreferencePanes || old.scopeApplications != preferences.scopeApplications
         if appRootsChanged {
             reindex()
@@ -1544,111 +1536,6 @@ final class AppModel {
     private func setUpdatePhase(_ phase: UpdatePhase) {
         updatePhase = phase
         rebuildStatusMenu()
-    }
-
-    func handleRemote(_ target: String) -> String {
-        record(category: "remote")
-        let parts = target.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
-        let path = String(parts.first ?? "/")
-        let query = parts.count > 1 ? String(parts[1]) : ""
-        let params = queryItems(query)
-        let supplied = params["token"] ?? ""
-        guard secureTokenEquals(supplied, preferences.remoteToken) else {
-            return "<p>Token required. Add ?token= from Jfred Preferences → Remote.</p>"
-        }
-        if path == "/run" {
-            let id = params["id"] ?? ""
-            performSystem(id)
-            return "<p>Ran \(escapeHTML(id)). <a href=\"/?token=\(preferences.remoteToken)\">Back</a></p>"
-        }
-        if path == "/open" {
-            let value = params["path"] ?? ""
-            if let url = URL(string: value), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
-                NSWorkspace.shared.open(url)
-            } else if value.hasPrefix("/") {
-                NSWorkspace.shared.open(URL(fileURLWithPath: value))
-            }
-            return "<p>Opened. <a href=\"/?token=\(preferences.remoteToken)\">Back</a></p>"
-        }
-        let q = params["q"] ?? ""
-        var body = """
-        <!doctype html><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Jfred Remote</title>
-        <style>body{font:15px -apple-system,sans-serif;background:#1b1b1b;color:#f2f2f2;margin:28px}a{color:#d7b4ff;text-decoration:none}input,button{font:inherit;padding:6px 8px}li{margin:6px 0}</style>
-        <h1>Jfred Remote</h1>
-        <form><input type="hidden" name="token" value="\(preferences.remoteToken)"><input name="q" value="\(escapeHTML(q))" placeholder="Search" autofocus><button>Search</button></form>
-        """
-        if !q.isEmpty {
-            let rows = Search.results(for: q, context: makeContext(files: [], windows: [], processes: [], tabs: [], profiles: [], definition: nil))
-            body += "<ul>"
-            for row in rows {
-                let href: String
-                if row.kind == "system" {
-                    href = "/run?token=\(preferences.remoteToken)&id=\(row.payload)"
-                } else if row.kind == "app" || row.kind == "url" || row.kind == "file" {
-                    let value = row.payload.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                    href = "/open?token=\(preferences.remoteToken)&path=\(value)"
-                } else {
-                    continue
-                }
-                body += "<li><a href=\"\(href)\">\(escapeHTML(row.title))</a><br><small>\(escapeHTML(row.subtitle))</small></li>"
-            }
-            body += "</ul>"
-        } else {
-            body += "<h2>\(escapeHTML(remoteCategory.title))</h2><ul>"
-            switch remoteCategory {
-            case .system:
-                for command in SystemCommand.all {
-                    body += "<li><a href=\"/run?token=\(preferences.remoteToken)&id=\(escapeHTML(command.id))\">\(escapeHTML(command.title))</a></li>"
-                }
-            case .applications:
-                for app in apps.prefix(40) {
-                    let value = app.path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                    body += "<li><a href=\"/open?token=\(preferences.remoteToken)&path=\(value)\">\(escapeHTML(app.name))</a></li>"
-                }
-            case .preferences:
-                for setting in SettingsCatalog.all {
-                    let value = setting.url.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                    body += "<li><a href=\"/open?token=\(preferences.remoteToken)&path=\(value)\">\(escapeHTML(setting.name))</a></li>"
-                }
-            case .folders:
-                body += "<li><a href=\"/open?token=\(preferences.remoteToken)&path=\(NSHomeDirectory())\">Home</a></li>"
-            case .bookmarks:
-                for link in links.prefix(40) {
-                    let value = link.url.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                    body += "<li><a href=\"/open?token=\(preferences.remoteToken)&path=\(value)\">\(escapeHTML(link.title))</a></li>"
-                }
-            }
-            body += "</ul>"
-        }
-        return body
-    }
-
-    private func queryItems(_ query: String) -> [String: String] {
-        var items: [String: String] = [:]
-        for pair in query.split(separator: "&") {
-            let bits = pair.split(separator: "=", maxSplits: 1)
-            let key = String(bits.first ?? "")
-            let value = bits.count > 1 ? String(bits[1]).removingPercentEncoding ?? String(bits[1]) : ""
-            items[key] = value
-        }
-        return items
-    }
-
-    private func escapeHTML(_ text: String) -> String {
-        text
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "'", with: "&#39;")
-    }
-
-    private func secureTokenEquals(_ a: String, _ b: String) -> Bool {
-        let x = Array(a.utf8), y = Array(b.utf8)
-        guard x.count == y.count else { return false }
-        var diff: UInt8 = 0
-        for i in x.indices { diff |= x[i] ^ y[i] }
-        return diff == 0
     }
 
     private func modifierAction(_ flags: NSEvent.ModifierFlags) -> String {
@@ -2437,28 +2324,6 @@ final class AppModel {
         showActions()
     }
 
-    func regenerateRemoteToken() {
-        preferences.remoteToken = UUID().uuidString.replacingOccurrences(of: "-", with: "")
-        scheduleSave()
-        applyRemote()
-    }
-
-    func applyRemote() {
-        if preferences.remoteToken.count < 24 {
-            preferences.remoteToken = UUID().uuidString.replacingOccurrences(of: "-", with: "")
-            scheduleSave()
-        }
-        remote.handle = { [weak self] target in
-            self?.handleRemote(target) ?? "Unavailable"
-        }
-        if preferences.remoteEnabled {
-            remoteWarning = remote.start(port: UInt16(preferences.remotePort), localOnly: preferences.remoteLocalOnly) ?? ""
-        } else {
-            remote.stop()
-            remoteWarning = ""
-        }
-    }
-
     private func pollClipboard() {
         let board = NSPasteboard.general
         guard preferences.clipboardEnabled, board.changeCount != clipChange else { return }
@@ -2710,7 +2575,7 @@ final class AppModel {
 }
 
 enum PrefSection: String, CaseIterable, Identifiable {
-    case general, features, workflows, appearance, remote, advanced, powerpack, usage, help, update
+    case general, features, workflows, appearance, advanced, usage, help, update
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -2718,9 +2583,7 @@ enum PrefSection: String, CaseIterable, Identifiable {
         case .features: "Features"
         case .workflows: "Workflows"
         case .appearance: "Appearance"
-        case .remote: "Remote"
         case .advanced: "Advanced"
-        case .powerpack: "Powerpack"
         case .usage: "Usage"
         case .help: "Help"
         case .update: "Update"
@@ -2732,9 +2595,7 @@ enum PrefSection: String, CaseIterable, Identifiable {
         case .features: "checkmark"
         case .workflows: "square.grid.2x2"
         case .appearance: "paintbrush.fill"
-        case .remote: "antenna.radiowaves.left.and.right"
         case .advanced: "slider.horizontal.3"
-        case .powerpack: "bolt.fill"
         case .usage: "chart.xyaxis.line"
         case .help: "lifepreserver"
         case .update: "square.and.arrow.down"
@@ -2809,38 +2670,6 @@ enum FeatureID: String, CaseIterable, Identifiable {
     }
 }
 
-enum RemoteCategory: String, CaseIterable, Identifiable {
-    case system, applications, preferences, folders, bookmarks
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .system: "System Commands"
-        case .applications: "Applications"
-        case .preferences: "Preferences"
-        case .folders: "Folders and Files"
-        case .bookmarks: "Bookmarks"
-        }
-    }
-    var subtitle: String {
-        switch self {
-        case .system: "Control your Mac"
-        case .applications: "Launch your Applications"
-        case .preferences: "Launch macOS Preferences"
-        case .folders: "Open your Folders and Files"
-        case .bookmarks: "URLs and Custom Searches"
-        }
-    }
-    var symbol: String {
-        switch self {
-        case .system: "power"
-        case .applications: "folder"
-        case .preferences: "gearshape"
-        case .folders: "house"
-        case .bookmarks: "globe"
-        }
-    }
-}
-
 struct PreferenceHit: Identifiable {
     var id: String
     var title: String
@@ -2863,14 +2692,12 @@ enum PreferenceIndex {
             PreferenceHit(id: "sync", title: "Syncing folder", detail: "Advanced", section: .advanced, feature: nil),
             PreferenceHit(id: "usage", title: "Usage", detail: "Stats", section: .usage, feature: nil),
             PreferenceHit(id: "theme", title: "Appearance themes", detail: "Alfred themes, custom themes and live preview", section: .appearance, feature: nil),
-            PreferenceHit(id: "remote", title: "Remote server", detail: "Local command page, QR pairing and token rotation", section: .remote, feature: nil),
             PreferenceHit(id: "theme-files", title: "Import or export themes", detail: "Appearance .alfredappearance files", section: .appearance, feature: nil),
             PreferenceHit(id: "clipboard-ignore", title: "Clipboard Ignore Apps", detail: "Privacy and excluded applications", section: .features, feature: .clipboard),
             PreferenceHit(id: "snippet-expansion", title: "Auto Expansion Options", detail: "Snippets, sound and clipboard restore", section: .features, feature: .snippets),
             PreferenceHit(id: "workflow-debugger", title: "Workflow Debugger", detail: "Test query, Run, Step and breakpoints", section: .workflows, feature: nil),
             PreferenceHit(id: "universal-actions", title: "Universal Actions", detail: "Selection hotkey and action ordering", section: .features, feature: .universalActions),
             PreferenceHit(id: "help", title: "Help and diagnostics", detail: "Troubleshooting, permissions, Copy Diagnostics", section: .help, feature: nil),
-            PreferenceHit(id: "powerpack", title: "Powerpack features", detail: "Locally included feature set", section: .powerpack, feature: nil),
             PreferenceHit(id: "update", title: "Check for Updates", detail: "Download a GitHub release and relaunch in place", section: .update, feature: nil),
         ]
         for feature in FeatureID.allCases {

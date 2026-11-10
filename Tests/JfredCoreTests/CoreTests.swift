@@ -315,6 +315,37 @@ struct CoreTests {
         #expect(decoded.customThemes.first?.width == 600)
     }
 
+    @Test func legacyRemotePreferenceKeysAreIgnored() throws {
+        var prefs = Preferences()
+        prefs.clipboardEnabled = true
+        prefs.syncFolder = "/tmp/jfred-sync"
+        prefs.terminalPrefix = ">"
+        prefs.newsletterEmail = "legacy@example.com"
+        let data = try JSONEncoder().encode(prefs)
+        guard var object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Issue.record("preferences JSON was not an object")
+            return
+        }
+        object["remoteEnabled"] = true
+        object["remoteLocalOnly"] = false
+        object["remoteToken"] = "legacy-token-should-be-ignored-abcdefghijkl"
+        object["remotePort"] = 8910
+        let polluted = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(Preferences.self, from: polluted)
+        #expect(decoded.clipboardEnabled == true)
+        #expect(decoded.syncFolder == "/tmp/jfred-sync")
+        #expect(decoded.terminalPrefix == ">")
+        #expect(decoded.newsletterEmail == "legacy@example.com")
+        let reencoded = try JSONSerialization.jsonObject(with: try JSONEncoder().encode(decoded)) as? [String: Any]
+        #expect(reencoded?["remoteEnabled"] == nil)
+        #expect(reencoded?["remoteLocalOnly"] == nil)
+        #expect(reencoded?["remoteToken"] == nil)
+        #expect(reencoded?["remotePort"] == nil)
+
+        let event = try JSONDecoder().decode(UsageEvent.self, from: Data(#"{"date":0,"category":"remote"}"#.utf8))
+        #expect(event.category == "remote")
+    }
+
 @Test func updateVersionsAndOfficialURLs() {
     #expect(AppVersion.compare("0.9.0", "0.10.0") == .orderedAscending)
     #expect(AppVersion.compare("v0.14.0", "0.14.0") == .orderedSame)
