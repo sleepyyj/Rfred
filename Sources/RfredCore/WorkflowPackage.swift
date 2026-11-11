@@ -2,7 +2,7 @@ import Foundation
 
 /// Validation and extraction for `.alfredworkflow` zip archives.
 /// Callers choose the destination directory (tests use a temp folder;
-/// the app copies into Application Support/JfredLocal/ImportedWorkflows).
+/// the app copies into Application Support/RfredLocal/ImportedWorkflows).
 public enum WorkflowPackage: Sendable {
     public enum ImportError: Error, Equatable, Sendable {
         case missingFile

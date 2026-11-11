@@ -4,7 +4,7 @@ import RfredCore
 import Vision
 
 enum ClipboardBoard {
-    static let origin = NSPasteboard.PasteboardType("dev.jim.jfred.clipboard-origin")
+    static let origin = NSPasteboard.PasteboardType("dev.jim.rfred.clipboard-origin")
 
     struct Capture {
         var string: String?

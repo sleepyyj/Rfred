@@ -349,7 +349,7 @@ struct LauncherTheme: Identifiable {
             return isDarkAppearance(colorScheme) ? systemDark : systemLight
         }
         let legacy = [
-            "jfred": "alfred", "jfred-dark": "alfred-dark", "modern": "alfred-modern",
+            "rfred": "alfred", "rfred-dark": "alfred-dark", "modern": "alfred-modern",
             "modern-dark": "alfred-modern-dark", "classic": "alfred-classic",
             "macos": "alfred-macos", "macos-dark": "alfred-macos-dark",
             "frosty": "frosty-teal", "avenir": "large-avenir", "contrast": "high-contrast",

@@ -26,19 +26,19 @@ check_runtime() {
     exit 1
   fi
 }
-identity="Jfred Codesign"
-local_dir="${HOME}/.config/jfred/codesign"
-p12="${JFRED_CODESIGN_P12:-}"
-password="${JFRED_CODESIGN_PASSWORD:-}"
+identity="Rfred Codesign"
+local_dir="${HOME}/.config/rfred/codesign"
+p12="${RFRED_CODESIGN_P12:-}"
+password="${RFRED_CODESIGN_PASSWORD:-}"
 
-if [ -z "$p12" ] && [ -f "${local_dir}/jfred-codesign.p12" ]; then
-  p12="${local_dir}/jfred-codesign.p12"
+if [ -z "$p12" ] && [ -f "${local_dir}/rfred-codesign.p12" ]; then
+  p12="${local_dir}/rfred-codesign.p12"
   password="$(tr -d '\n' < "${local_dir}/password")"
 fi
 
 if [ -z "$p12" ]; then
-  if [ "${JFRED_CODESIGN_REQUIRED:-}" = "1" ]; then
-    echo "JFRED_CODESIGN_P12 is required for this build" >&2
+  if [ "${RFRED_CODESIGN_REQUIRED:-}" = "1" ]; then
+    echo "RFRED_CODESIGN_P12 is required for this build" >&2
     exit 1
   fi
   codesign --force --options runtime --entitlements "$entitlements" --sign - "$app"
@@ -57,7 +57,7 @@ if [ -z "$password" ]; then
   exit 1
 fi
 
-work="$(mktemp -d "${TMPDIR:-/tmp}/jfred-codesign.XXXXXX")"
+work="$(mktemp -d "${TMPDIR:-/tmp}/rfred-codesign.XXXXXX")"
 keychain="${work}/signing.keychain-db"
 default_keychain="$(security default-keychain | tr -d '[:space:]"')"
 search_list="$(security list-keychains -d user | sed -e 's/^[[:space:]]*//' -e 's/"//g')"
@@ -97,7 +97,7 @@ codesign --verify --deep --strict "$app"
 check_runtime
 req="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^.*designated => //p')"
 case "$req" in
-  'identifier "dev.jim.jfred.local" and certificate leaf = H"'*'"') ;;
+  'identifier "dev.jim.rfred.local" and certificate leaf = H"'*'"') ;;
   *)
     echo "Unexpected designated requirement: $req" >&2
     exit 1

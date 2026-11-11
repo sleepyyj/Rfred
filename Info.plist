@@ -30,7 +30,7 @@
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
-	<string>dev.jim.jfred.local</string>
+	<string>dev.jim.rfred.local</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -43,10 +43,10 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>dev.jim.jfred.local</string>
+			<string>dev.jim.rfred.local</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>jfredlocal</string>
+				<string>rfredlocal</string>
 			</array>
 		</dict>
 	</array>

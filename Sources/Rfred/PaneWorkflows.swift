@@ -351,7 +351,7 @@ struct WorkflowsPane: View {
     private func export(_ workflow: Workflow, metadataOnly: Bool) {
         let panel = NSSavePanel()
         let base = workflow.name.replacingOccurrences(of: "/", with: "-")
-        panel.nameFieldStringValue = base + (metadataOnly ? " Metadata.json" : ".jfred-workflow.json")
+        panel.nameFieldStringValue = base + (metadataOnly ? " Metadata.json" : ".rfred-workflow.json")
         panel.allowedContentTypes = [.json]
         presentFilePanel(panel) { url in
             writeExportedWorkflow(workflow, metadataOnly: metadataOnly, to: url)
@@ -1620,7 +1620,7 @@ struct WorkflowEditor: View {
 
     private func exportCurrentWorkflow() {
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = (workflow?.name ?? "Workflow").replacingOccurrences(of: "/", with: "-") + ".jfred-workflow.json"
+        panel.nameFieldStringValue = (workflow?.name ?? "Workflow").replacingOccurrences(of: "/", with: "-") + ".rfred-workflow.json"
         panel.allowedContentTypes = [.json]
         guard panel.runModal() == .OK, let url = panel.url, let workflow else { return }
         let encoder = JSONEncoder()

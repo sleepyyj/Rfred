@@ -301,7 +301,7 @@ struct AdvancedPane: View {
                                 .lineLimit(3)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        note("This folder can be local or under the control of a syncing service. Rfred keeps its own JfredLocal folder inside it, separate from the official Rfred preferences.")
+                        note("This folder can be local or under the control of a syncing service. Rfred keeps its own RfredLocal folder inside it, separate from the official Rfred preferences.")
                         HStack {
                             Button("Set preferences folder...") { model.chooseSupportFolder() }
                             Button("Reveal in Finder") { model.revealSupportFolder() }
