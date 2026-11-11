@@ -100,7 +100,7 @@
 - Appearance 已支持 `.alfredappearance` 导入/导出、自定义主题编辑/删除；仍没有 Alfred 的逐控件主题调试器。
 - Workflows 的节点自由连线、对象库、断点/单步调试仍是结构级；空态、列表、导入、模板、基础画布、Inspector、拖拽重排与顺序 Debugger 已对齐。
 - Powerpack 与 Remote 已从产品中移除；Help 的完整内容仍是结构级。Alfred 的私有 iOS 配对协议不做。
-- Alfred 的手绘图标/主题壁纸没有复制（版权与独立性考虑），Jfred 用 SF Symbols + 同色块。
+- Alfred 的手绘图标/主题壁纸没有复制（版权与独立性考虑），Rfred 用 SF Symbols + 同色块。
 - 少数 Alfred 选项只落了 UI 与偏好字段，未逐一接行为（例如 File Buffer 的 Shift+Option 变体、Snippets 的完整 Auto Expansion 子选项、Calculator 的高级函数全集）。
 - 像素级字体/间距仍有 1–3pt 级差异；REA 证据给出的是 frame 与颜色，不是渲染后的字形度量。
 
@@ -111,7 +111,7 @@ git switch rea
 swift build
 ./scripts/test.sh
 ./scripts/build-app.sh
-open build/Jfred.app
+open build/Rfred.app
 ```
 
 证据与命令见 `docs/rea/README.md`，UI 规格见 `docs/rea/ui-spec.md`，安全审计见 `docs/rea/security-audit.md`。
@@ -134,13 +134,13 @@ open build/Jfred.app
 
 ### 后续变更
 
-- Powerpack 与 Remote 已从产品中完全移除。偏好设置不再包含这两页；不再启动 HTTP 监听，也不再生成、存储或展示 Remote token / QR 配对。旧 `state.json` 中的 `remoteEnabled` / `remoteLocalOnly` / `remoteToken` / `remotePort` 在解码时会被忽略，下次保存时不再写出。Alfred 工作流取样文中的 “Powerpack 已启用” 仍指 Alfred 许可状态，不是 Jfred 模块。
+- Powerpack 与 Remote 已从产品中完全移除。偏好设置不再包含这两页；不再启动 HTTP 监听，也不再生成、存储或展示 Remote token / QR 配对。旧 `state.json` 中的 `remoteEnabled` / `remoteLocalOnly` / `remoteToken` / `remotePort` 在解码时会被忽略，下次保存时不再写出。Alfred 工作流取样文中的 “Powerpack 已启用” 仍指 Alfred 许可状态，不是 Rfred 模块。
 
 ### 已知限制
 
 - Workflows 已支持对象图和条件分支；仍不支持 Alfred 的端口拖拽画线和私有 Automation Task。
 - 少量高级选项仍只有 UI/偏好字段，未逐一接行为（Clipboard Fast Append、Music random larger albums、File Search arrow navigation）。
-- Alfred 的手绘图标、壁纸、nib/字符串表未复制；Jfred 使用 SF Symbols 与独立生成资源。
+- Alfred 的手绘图标、壁纸、nib/字符串表未复制；Rfred 使用 SF Symbols 与独立生成资源。
 - 像素级仍有少量 1–3pt 差异。
 
 

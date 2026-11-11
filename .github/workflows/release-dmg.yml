@@ -108,7 +108,7 @@ jobs:
           set -euo pipefail
           tag="${{ steps.version.outputs.tag }}"
           prev="${{ steps.version.outputs.prev }}"
-          dmg="$(ls dist/Jfred-*.dmg)"
+          dmg="$(ls dist/Rfred-*.dmg)"
           notes="${RUNNER_TEMP}/release-notes.md"
           ver="${{ steps.version.outputs.ver }}"
           if python3 ./scripts/changelog-notes.py "$ver" > "$notes"; then

@@ -1,6 +1,6 @@
 # REA 复刻证据与说明
 
-本目录记录 `rea` 分支如何用 [REA](https://rea.tools/) 对 Alfred 5 做二进制与界面取证，以及这些证据如何映射到 Jfred 的实现。原始证据保存在 `/tmp/alfred-rea/`（不提交，避免把 Alfred 的字符串表、nib 图和资源带进仓库）。
+本目录记录 `rea` 分支如何用 [REA](https://rea.tools/) 对 Alfred 5 做二进制与界面取证，以及这些证据如何映射到 Rfred 的实现。原始证据保存在 `/tmp/alfred-rea/`（不提交，避免把 Alfred 的字符串表、nib 图和资源带进仓库）。
 
 ## 目标
 
@@ -58,5 +58,5 @@ Hopper demo 的伪代码是接近汇编的形态，不能当作可编译的源�
 
 - 不复制 Alfred 的图标、主题壁纸、nib 文件、字符串表或反编译代码。
 - 界面文字是功能性标签（例如 “Default Results”“Clipboard History”），为了兼容性保留；其余说明文字为独立撰写。
-- Jfred 与 Running with Crayons 无关联。Alfred 是其所有者的商标。
+- Rfred 与 Running with Crayons 无关联。Alfred 是其所有者的商标。
 - 逆向仅用于本机互操作与独立实现；分发前请自行评估当地法律与 Alfred EULA。

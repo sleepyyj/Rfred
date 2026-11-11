@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sign a Jfred.app bundle.
+# Sign a Rfred.app bundle.
 #
 # macOS ties Desktop, Documents, and Downloads access to the designated
 # requirement. An ad-hoc signature ("codesign --sign -") makes that requirement
@@ -9,12 +9,12 @@
 # which stays the same across machines and versions.
 set -euo pipefail
 
-app="${1:?usage: codesign-app.sh Jfred.app}"
-# The hardened runtime stops other processes from loading code into Jfred
+app="${1:?usage: codesign-app.sh Rfred.app}"
+# The hardened runtime stops other processes from loading code into Rfred
 # (DYLD_INSERT_LIBRARIES, unsigned libraries, debugger attach) and using its
 # Accessibility, Automation, and folder grants. Sending Apple events under the
-# hardened runtime needs the entitlement in Jfred.entitlements.
-entitlements="$(cd "$(dirname "$0")/.." && pwd)/Resources/Jfred.entitlements"
+# hardened runtime needs the entitlement in Rfred.entitlements.
+entitlements="$(cd "$(dirname "$0")/.." && pwd)/Resources/Rfred.entitlements"
 if [ ! -f "$entitlements" ]; then
   echo "Entitlements file not found: $entitlements" >&2
   exit 1

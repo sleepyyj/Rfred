@@ -3,13 +3,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 swift build -c release
 bin_dir="$(swift build -c release --show-bin-path)"
-APP="build/Jfred.app"
+APP="build/Rfred.app"
 if [ -e "$APP" ]; then
   mkdir -p /tmp/grok
   mv "$APP" "/tmp/grok/$(basename "$APP").$(date +%Y%m%d%H%M%S)"
 fi
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$bin_dir/Jfred" "$APP/Contents/MacOS/Jfred"
+cp "$bin_dir/Rfred" "$APP/Contents/MacOS/Rfred"
 cp Info.plist "$APP/Contents/Info.plist"
 if [ -f Resources/AppIcon.png ]; then
   ICONSET="$(mktemp -d)/AppIcon.iconset"
