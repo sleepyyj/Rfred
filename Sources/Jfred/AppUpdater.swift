@@ -1,7 +1,7 @@
 import Foundation
 import JfredCore
 
-// Update checks read public GitHub releases for weijing24/Jfred and send only
+// Update checks read public GitHub releases for sleepyyj/Rfred and send only
 // the app version. A download is installed only after the checksum, bundle id,
 // version and code signature match that release.
 
@@ -219,8 +219,10 @@ enum UpdateInstaller {
         }
         _ = run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", staged.path], timeout: 20)
         try validateApp(staged, version: release.version)
-        guard run("/usr/bin/codesign", ["--verify", "--deep", "--strict", staged.path], timeout: 30) == 0 else {
-            throw UpdateInstallError.message("The downloaded app failed signature verification.")
+        // A valid signature is not enough: an ad-hoc or foreign certificate also verifies.
+        // Require the release certificate, so a replaced DMG cannot be installed.
+        guard run("/usr/bin/codesign", ["--verify", "--deep", "--strict", "-R=\(AppUpdateFeed.signingRequirement)", staged.path], timeout: 30) == 0 else {
+            throw UpdateInstallError.message("The downloaded app isn't signed with the Jfred release certificate.")
         }
         _ = run("/usr/sbin/diskutil", ["eject", "force", mount.path], timeout: 30)
         mounted = false

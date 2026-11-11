@@ -139,10 +139,10 @@ Jfred 1.0 是一次正式发布：把启动器里已经做稳的能力收在同�
 
 ## 安装
 
-1. 从 [GitHub Releases](https://github.com/weijing24/Jfred/releases) 下载最新的 `Jfred-*-arm64.dmg`。
+1. 从 [GitHub Releases](https://github.com/sleepyyj/Rfred/releases) 下载最新的 `Jfred-*-arm64.dmg`。
 2. 把 Jfred 拖进「应用程序」文件夹。
 3. 首次启动请右键点 Jfred.app，选择「打开」。应用使用稳定的自签名证书，未经 Apple 公证；也可以在终端执行 `xattr -cr /Applications/Jfred.app` 后再打开。
-4. 之后的版本可以通过应用内更新安装。更新程序会在替换应用前移除隔离属性，并校验签名。
+4. 之后的版本可以通过应用内更新安装。更新程序会在替换应用前移除隔离属性，并确认新版本由同一张发布证书签名。
 
 ## 系统要求
 
@@ -154,8 +154,8 @@ Jfred 1.0 是一次正式发布：把启动器里已经做稳的能力收在同�
 需要 Xcode 或对应的命令行工具，以及 Swift 6。
 
 ```bash
-git clone https://github.com/weijing24/Jfred.git
-cd Jfred
+git clone https://github.com/sleepyyj/Rfred.git
+cd Rfred
 ./scripts/test.sh
 ./scripts/build-app.sh
 open build/Jfred.app

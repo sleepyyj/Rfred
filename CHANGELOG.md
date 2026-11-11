@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.4
+
+### Updates and signing
+
+In-app updates now come from the sleepyyj/Rfred releases. Before an update replaces the app, Jfred checks that it is signed with the Jfred release certificate, and refuses a copy signed ad hoc or with another certificate. Release builds use the hardened runtime, so other processes can no longer load code into Jfred and use its Accessibility, Automation, or folder access. Existing permissions are kept.
+
 ## 1.1.3
 
 ### Preferences

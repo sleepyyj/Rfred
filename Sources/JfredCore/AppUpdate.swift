@@ -122,9 +122,16 @@ public enum AppVersion {
 }
 
 public enum AppUpdateFeed {
-    public static let owner = "weijing24"
-    public static let repo = "Jfred"
+    public static let owner = "sleepyyj"
+    public static let repo = "Rfred"
     public static let bundleIdentifier = "dev.jim.jfred.local"
+    /// SHA-1 of the "Jfred Codesign" leaf certificate that signs every release.
+    public static let signingCertificateLeafHash = "e4bb0d4d89c4d6d1ab0c3617de5d88225c5a3910"
+    /// Code requirement an update must satisfy before it replaces this copy.
+    /// It is the designated requirement `scripts/codesign-app.sh` checks on release builds.
+    public static var signingRequirement: String {
+        "identifier \"\(bundleIdentifier)\" and certificate leaf = H\"\(signingCertificateLeafHash)\""
+    }
     public static let maxFeedBytes = 1_000_000
     public static let maxAssetBytes: Int64 = 80 * 1024 * 1024
     public static let notesLimit = 12_000

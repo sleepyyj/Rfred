@@ -464,7 +464,7 @@ struct UpdatePane: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Change Log").font(.system(size: 28, weight: .bold))
-                    Text("Checks public GitHub releases for weijing24/Jfred and can replace this copy in place. The request includes only the app version.")
+                    Text("Checks public GitHub releases for sleepyyj/Rfred and can replace this copy in place. The request includes only the app version.")
                         .foregroundStyle(.secondary)
                     if case .failed(let message) = model.updatePhase {
                         Text(message)

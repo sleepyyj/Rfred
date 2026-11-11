@@ -346,6 +346,10 @@ struct CoreTests {
         #expect(event.category == "remote")
     }
 
+@Test func updateSigningRequirementPinsTheReleaseCertificate() {
+    #expect(AppUpdateFeed.signingRequirement == #"identifier "dev.jim.jfred.local" and certificate leaf = H"e4bb0d4d89c4d6d1ab0c3617de5d88225c5a3910""#)
+}
+
 @Test func updateVersionsAndOfficialURLs() {
     #expect(AppVersion.compare("0.9.0", "0.10.0") == .orderedAscending)
     #expect(AppVersion.compare("0.30.7", "1.0.0") == .orderedAscending)
@@ -358,13 +362,13 @@ struct CoreTests {
     #expect(AppVersion.compare("nope", "1.0.0") == nil)
     #expect(AppUpdateFeed.version(fromTag: "v0.14.0") == "0.14.0")
     #expect(AppUpdateFeed.version(fromTag: "0.14.0-beta") == nil)
-    let url = URL(string: "https://github.com/weijing24/Jfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!
+    let url = URL(string: "https://github.com/sleepyyj/Rfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!
     #expect(AppUpdateFeed.isOfficialAssetURL(url, version: "0.14.0", architecture: "arm64"))
     #expect(!AppUpdateFeed.isOfficialAssetURL(url, version: "0.14.0", architecture: "x86_64"))
-    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "http://github.com/weijing24/Jfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!, version: "0.14.0", architecture: "arm64"))
-    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "https://github.com.evil/weijing24/Jfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!, version: "0.14.0", architecture: "arm64"))
-    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "https://evilgithub.com/weijing24/Jfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!, version: "0.14.0", architecture: "arm64"))
-    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "https://github.com/weijing24/Jfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg.evil")!, version: "0.14.0", architecture: "arm64"))
+    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "http://github.com/sleepyyj/Rfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!, version: "0.14.0", architecture: "arm64"))
+    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "https://github.com.evil/sleepyyj/Rfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!, version: "0.14.0", architecture: "arm64"))
+    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "https://evilgithub.com/sleepyyj/Rfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!, version: "0.14.0", architecture: "arm64"))
+    #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "https://github.com/sleepyyj/Rfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg.evil")!, version: "0.14.0", architecture: "arm64"))
     #expect(!AppUpdateFeed.isOfficialAssetURL(URL(string: "https://github.com/other/Jfred/releases/download/v0.14.0/Jfred-0.14.0-arm64.dmg")!, version: "0.14.0", architecture: "arm64"))
     #expect(!AppUpdateFeed.isAllowedAssetHost("release-assets.githubusercontent.com.evil"))
     #expect(AppUpdateFeed.isAllowedAssetHost("release-assets.githubusercontent.com"))
@@ -384,8 +388,8 @@ struct CoreTests {
       {"tag_name":"v0.14.0-beta","prerelease":true,"body":"skip tag","assets":[\(asset("0.14.0-beta", sha, 10))]},
       {"tag_name":"v0.16.0","prerelease":true,"body":"pre","assets":[\(asset("0.16.0", sha, 10)),{"name":"notes.txt","browser_download_url":"https://evil.example/x","size":4,"digest":"sha256:\(sha)"}]},
       {"tag_name":"v0.13.0","prerelease":false,"body":"old","assets":[\(asset("0.13.0", sha, 10))]},
-      {"tag_name":"v0.12.0","prerelease":false,"body":"bad","assets":[{"name":"Jfred-0.12.0-arm64.dmg","browser_download_url":"https://github.com/weijing24/Jfred/releases/download/v0.12.0/Jfred-0.12.0-arm64.dmg","size":10,"digest":"md5:\(sha)"}]},
-      {"tag_name":"v0.11.0","prerelease":false,"body":"huge","assets":[{"name":"Jfred-0.11.0-arm64.dmg","browser_download_url":"https://github.com/weijing24/Jfred/releases/download/v0.11.0/Jfred-0.11.0-arm64.dmg","size":\(AppUpdateFeed.maxAssetBytes + 1),"digest":"sha256:\(sha)"}]},
+      {"tag_name":"v0.12.0","prerelease":false,"body":"bad","assets":[{"name":"Jfred-0.12.0-arm64.dmg","browser_download_url":"https://github.com/sleepyyj/Rfred/releases/download/v0.12.0/Jfred-0.12.0-arm64.dmg","size":10,"digest":"md5:\(sha)"}]},
+      {"tag_name":"v0.11.0","prerelease":false,"body":"huge","assets":[{"name":"Jfred-0.11.0-arm64.dmg","browser_download_url":"https://github.com/sleepyyj/Rfred/releases/download/v0.11.0/Jfred-0.11.0-arm64.dmg","size":\(AppUpdateFeed.maxAssetBytes + 1),"digest":"sha256:\(sha)"}]},
       {"tag_name":"v0.14.0","prerelease":false,"body":"stable notes","assets":[\(asset("0.14.0", sha, 20, architecture: "x86_64")),\(asset("0.14.0", sha, 30))]}
     ]
     """
@@ -500,7 +504,7 @@ struct CoreTests {
 
 private func asset(_ version: String, _ sha: String, _ size: Int64, architecture: String = "arm64") -> String {
     let name = AppUpdateFeed.assetName(version: version, architecture: architecture)
-    return #"{"name":"\#(name)","browser_download_url":"https://github.com/weijing24/Jfred/releases/download/v\#(version)/\#(name)","size":\#(size),"digest":"sha256:\#(sha)"}"#
+    return #"{"name":"\#(name)","browser_download_url":"https://github.com/sleepyyj/Rfred/releases/download/v\#(version)/\#(name)","size":\#(size),"digest":"sha256:\#(sha)"}"#
 }
 
 

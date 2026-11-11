@@ -38,7 +38,11 @@ The private key is not in git.
 - Local copy: `~/.config/jfred/codesign/jfred-codesign.p12`, with the password in `~/.config/jfred/codesign/password`. A local `scripts/build-app.sh` uses these files when they exist.
 - Actions secrets: `JFRED_CODESIGN_P12` (base64 of the same `.p12`) and `JFRED_CODESIGN_PASSWORD`.
 
-Do not generate a replacement certificate. A new certificate is a new leaf hash, and the next update asks for folder access again. The certificate is not an Apple Developer ID and the app is not notarized. Gatekeeper still treats a freshly downloaded copy as an unidentified developer; the in-app updater removes the quarantine attribute before it replaces `Jfred.app`. The signature still has to pass `codesign --verify --deep --strict`, which is what the updater checks before swapping the bundle.
+Do not generate a replacement certificate. A new certificate is a new leaf hash, and the next update asks for folder access again. The certificate is not an Apple Developer ID and the app is not notarized. Gatekeeper still treats a freshly downloaded copy as an unidentified developer; the in-app updater removes the quarantine attribute before it replaces `Jfred.app`. The signature still has to pass `codesign --verify --deep --strict` against the designated requirement above, which is what the updater checks before swapping the bundle. An ad-hoc signature or another certificate is refused. `AppUpdateFeed.signingCertificateLeafHash` holds the leaf hash; it must match the certificate that signs releases.
+
+`scripts/codesign-app.sh` signs with the hardened runtime (`--options runtime`) and `Resources/Jfred.entitlements`, and fails when the runtime flag is missing. The only entitlement is `com.apple.security.automation.apple-events`, which the hardened runtime requires for the AppleScript commands. Do not add `allow-dyld-environment-variables`, `disable-library-validation`, or `get-task-allow`; they let another process load code into Jfred and use its Accessibility and folder grants.
+
+The in-app updater reads releases from `sleepyyj/Rfred` (`AppUpdateFeed.owner` and `AppUpdateFeed.repo`).
 
 Example:
 
