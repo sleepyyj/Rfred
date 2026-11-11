@@ -116,7 +116,7 @@ enum RfredStore {
 
     private static func snapshotURL() -> URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Jfred/LauncherPreferences", isDirectory: true)
+            .appendingPathComponent("Rfred/LauncherPreferences", isDirectory: true)
     }
 
     private static func markerURL() -> URL {
@@ -155,7 +155,7 @@ enum RfredStore {
         try? FileManager.default.moveItem(at: url, to: destination)
     }
 
-    /// Current library: alongside `state.json` under Application Support/JfredLocal.
+    /// Current library: alongside `state.json` under Application Support/RfredLocal.
     static func importedWorkflowsURL() -> URL {
         migrateImportedWorkflowsIfNeeded()
         return currentImportedWorkflowsURL()
@@ -164,14 +164,14 @@ enum RfredStore {
     /// Pre-migration location. Kept readable as a fallback; never deleted.
     static func legacyImportedWorkflowsURL() -> URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Jfred/ImportedWorkflows", isDirectory: true)
+            .appendingPathComponent("Rfred/ImportedWorkflows", isDirectory: true)
     }
 
     private static func currentImportedWorkflowsURL() -> URL {
         SupportPaths.directory(syncFolder: "").appendingPathComponent("ImportedWorkflows", isDirectory: true)
     }
 
-    /// Copies `Application Support/Jfred/ImportedWorkflows` into JfredLocal when
+    /// Copies `Application Support/Rfred/ImportedWorkflows` into RfredLocal when
     /// the new folder has no bundles yet. The old folder is left in place.
     static func migrateImportedWorkflowsIfNeeded() {
         let source = legacyImportedWorkflowsURL()
@@ -195,7 +195,7 @@ enum RfredStore {
         }
     }
 
-    /// If `path` lived under the legacy folder and a copy exists in JfredLocal, return the new path.
+    /// If `path` lived under the legacy folder and a copy exists in RfredLocal, return the new path.
     static func relocatedRootPath(_ path: String) -> String? {
         let source = legacyImportedWorkflowsURL().standardizedFileURL.path
         let destination = currentImportedWorkflowsURL().standardizedFileURL.path

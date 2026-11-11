@@ -52,8 +52,8 @@
 - Help 补搜索框、按主题分组的排障说明、Copy Diagnostics 与支持目录/索引计数。
 - Workflow action 节点支持拖拽重排（DropDelegate），Inspector 也保留左右移动按钮。
 - Clipboard 的 Clear Keyword 真正生效：支持清空全部或最近 5/15 分钟，并可开关该 keyword。
-- 启动器 Action Panel 已实测：`jfredlocal://actions?q=co` 可打开并按类型显示 Open/Reveal/Copy Path/Quick Look/Copy Name/Large Type。
-- Universal Actions 补全局 ⌥⌘\ 选择动作：读取当前选中文本（Accessibility）或仅在 Finder 为前台时读取选中文件（Automation），弹出 Copy / Large Type / Open as URL / Search the Web 等动作；`jfredlocal://selection` 可手动触发。
+- 启动器 Action Panel 已实测：`rfredlocal://actions?q=co` 可打开并按类型显示 Open/Reveal/Copy Path/Quick Look/Copy Name/Large Type。
+- Universal Actions 补全局 ⌥⌘\ 选择动作：读取当前选中文本（Accessibility）或仅在 Finder 为前台时读取选中文件（Automation），弹出 Copy / Large Type / Open as URL / Search the Web 等动作；`rfredlocal://selection` 可手动触发。
 - Workflows 画布左侧新增 Objects 调色板，可直接插入 7 种动作类型；与 Add Action 菜单、拖拽重排、Inspector 并存。
 - Workflow Debugger 增加 Step：一次执行一个 action 并记录输出，光标/Finished 状态可见，方便逐步排查。
 - Workflow 动作支持断点（Inspector 的 Pause at this action，节点右上红点），Run 会在断点前暂停，再 Run 从暂停处继续。
@@ -81,7 +81,7 @@
 - File Search 的 Use file type icons for files on external drives 对 `/Volumes/` 下的结果使用通用类型图标。
 - 加固 Theme Options 的绑定：自定义主题被删除时 getter/setter 不再越界，避免编辑期间崩溃。
 - File Search 增加路径浏览：输入 `/` 或 `~` 时列出目录（文件夹优先），↩ 进入子目录；FileBrowser 有独立单元测试。
-- Music 补独立的 Mini Player 面板：封面占位、当前曲目/歌手/播放状态、上一首/播放暂停/下一首、音乐库搜索与结果播放；`music` 关键字或 `jfredlocal://music` 可打开。
+- Music 补独立的 Mini Player 面板：封面占位、当前曲目/歌手/播放状态、上一首/播放暂停/下一首、音乐库搜索与结果播放；`music` 关键字或 `rfredlocal://music` 可打开。
 - Remote 补 “Add iOS Remote” QR 配对面板（本地 URL + token，可复制）与一键 Regenerate Token，仍不实现 Alfred 的私有 iOS 配对协议。
 - Contacts、Music 为新增页面，并各自补 Contacts/Email/Advanced 与 General/Keywords/Advanced tab；Music 已接 Play/Pause、Previous、Next、Current Track。
 

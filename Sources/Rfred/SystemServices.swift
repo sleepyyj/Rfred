@@ -725,10 +725,10 @@ enum SupportPaths {
         let url: URL
         if !syncFolder.isEmpty {
             let base = URL(fileURLWithPath: (syncFolder as NSString).expandingTildeInPath, isDirectory: true)
-            url = base.appendingPathComponent("JfredLocal", isDirectory: true)
+            url = base.appendingPathComponent("RfredLocal", isDirectory: true)
         } else {
             let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            url = appSupport.appendingPathComponent("JfredLocal", isDirectory: true)
+            url = appSupport.appendingPathComponent("RfredLocal", isDirectory: true)
             adoptPreviousState(into: url)
         }
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])

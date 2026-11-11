@@ -82,19 +82,19 @@ jobs:
       - name: Load signing certificate
         if: steps.version.outputs.skip != 'true'
         env:
-          JFRED_CODESIGN_P12_BASE64: ${{ secrets.JFRED_CODESIGN_P12 }}
-          JFRED_CODESIGN_PASSWORD: ${{ secrets.JFRED_CODESIGN_PASSWORD }}
+          RFRED_CODESIGN_P12_BASE64: ${{ secrets.RFRED_CODESIGN_P12 }}
+          RFRED_CODESIGN_PASSWORD: ${{ secrets.RFRED_CODESIGN_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "$JFRED_CODESIGN_P12_BASE64" ] || [ -z "$JFRED_CODESIGN_PASSWORD" ]; then
-            echo "JFRED_CODESIGN_P12 and JFRED_CODESIGN_PASSWORD must be set" >&2
+          if [ -z "$RFRED_CODESIGN_P12_BASE64" ] || [ -z "$RFRED_CODESIGN_PASSWORD" ]; then
+            echo "RFRED_CODESIGN_P12 and RFRED_CODESIGN_PASSWORD must be set" >&2
             exit 1
           fi
-          p12="$RUNNER_TEMP/jfred-codesign.p12"
-          printf '%s' "$JFRED_CODESIGN_P12_BASE64" | base64 --decode > "$p12"
-          echo "JFRED_CODESIGN_P12=$p12" >> "$GITHUB_ENV"
-          echo "JFRED_CODESIGN_PASSWORD=$JFRED_CODESIGN_PASSWORD" >> "$GITHUB_ENV"
-          echo "JFRED_CODESIGN_REQUIRED=1" >> "$GITHUB_ENV"
+          p12="$RUNNER_TEMP/rfred-codesign.p12"
+          printf '%s' "$RFRED_CODESIGN_P12_BASE64" | base64 --decode > "$p12"
+          echo "RFRED_CODESIGN_P12=$p12" >> "$GITHUB_ENV"
+          echo "RFRED_CODESIGN_PASSWORD=$RFRED_CODESIGN_PASSWORD" >> "$GITHUB_ENV"
+          echo "RFRED_CODESIGN_REQUIRED=1" >> "$GITHUB_ENV"
 
       - name: Build DMG
         if: steps.version.outputs.skip != 'true'

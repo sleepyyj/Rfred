@@ -347,7 +347,7 @@ struct CoreTests {
     }
 
 @Test func updateSigningRequirementPinsTheReleaseCertificate() {
-    #expect(AppUpdateFeed.signingRequirement == #"identifier "dev.jim.jfred.local" and certificate leaf = H"e4bb0d4d89c4d6d1ab0c3617de5d88225c5a3910""#)
+    #expect(AppUpdateFeed.signingRequirement == #"identifier "dev.jim.rfred.local" and certificate leaf = H"e4bb0d4d89c4d6d1ab0c3617de5d88225c5a3910""#)
 }
 
 @Test func updateVersionsAndOfficialURLs() {
@@ -470,7 +470,7 @@ struct CoreTests {
 }
 
 @Test func liveGitHubFeedParsesWhenRequested() async throws {
-    guard ProcessInfo.processInfo.environment["JFRED_UPDATE_LIVE"] == "1" else { return }
+    guard ProcessInfo.processInfo.environment["RFRED_UPDATE_LIVE"] == "1" else { return }
     var request = URLRequest(url: AppUpdateFeed.releasesURL())
     request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
     request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
@@ -711,7 +711,7 @@ struct WorkflowGraphTests {
 extension WorkflowGraphTests {
     @Test func importsInstalledRfredWorkflowsWhenPresent() throws {
         let root = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-            .appendingPathComponent("Library/Application Support/Jfred/ImportedWorkflows", isDirectory: true)
+            .appendingPathComponent("Library/Application Support/Rfred/ImportedWorkflows", isDirectory: true)
         guard let entries = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return }
         for entry in entries where entry.hasDirectoryPath {
             let plist = entry.appendingPathComponent("info.plist")
@@ -870,7 +870,7 @@ struct WorkflowPersistenceTests {
             name: "Legacy Key but Imported",
             builtin: "dev",
             bundleID: "dev",
-            rootPath: "/Users/demo/Library/Application Support/Jfred/ImportedWorkflows/abc"
+            rootPath: "/Users/demo/Library/Application Support/Rfred/ImportedWorkflows/abc"
         )
         let added = Workflow(
             name: "New One",

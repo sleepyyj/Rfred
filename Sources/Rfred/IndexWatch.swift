@@ -157,8 +157,8 @@ final class PathWatch: @unchecked Sendable {
 
 final class IndexWatch: @unchecked Sendable {
     static let shared = IndexWatch()
-    private let apps = PathWatch(label: "dev.jim.jfred.apps")
-    private let files = PathWatch(label: "dev.jim.jfred.files")
+    private let apps = PathWatch(label: "dev.jim.rfred.apps")
+    private let files = PathWatch(label: "dev.jim.rfred.files")
     private var appDebounce: DispatchWorkItem?
     private var wakeObserver: NSObjectProtocol?
     private var preferences = Preferences()

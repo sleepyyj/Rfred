@@ -514,12 +514,12 @@ public struct WorkflowEngine: Sendable {
 
     public var cacheDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Caches/JfredLocal/Workflows/\(workflow.bundleID.isEmpty ? workflow.id.uuidString : workflow.bundleID)", isDirectory: true)
+            .appendingPathComponent("Library/Caches/RfredLocal/Workflows/\(workflow.bundleID.isEmpty ? workflow.id.uuidString : workflow.bundleID)", isDirectory: true)
     }
 
     public var dataDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/JfredLocal/Workflow Data/\(workflow.bundleID.isEmpty ? workflow.id.uuidString : workflow.bundleID)", isDirectory: true)
+            .appendingPathComponent("Library/Application Support/RfredLocal/Workflow Data/\(workflow.bundleID.isEmpty ? workflow.id.uuidString : workflow.bundleID)", isDirectory: true)
     }
 
     public static func language(for object: WorkflowObject) -> WorkflowScriptLanguage {

@@ -106,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 model.importWorkflow(at: url)
                 continue
             }
-            guard url.scheme == "jfredlocal" else { continue }
+            guard url.scheme == "rfredlocal" else { continue }
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             let query = String((items.first { $0.name == "q" }?.value ?? "").prefix(512))
             if url.host == "search" || url.host == nil {

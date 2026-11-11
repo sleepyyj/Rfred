@@ -4,7 +4,7 @@
 
 ### Rfred
 
-The app is now named Rfred. The bundle is `Rfred.app` and release disk images are named `Rfred-<version>-<arch>.dmg`. Settings, clipboard history, snippets, imported workflows, and granted permissions carry over, because the bundle identifier, the signing certificate, the `JfredLocal` data folder, and the `jfredlocal://` URL scheme are unchanged. An installed `Jfred.app` is not renamed by an update: drag `Rfred.app` into Applications once and remove the old copy.
+The app is now named Rfred. The bundle is `Rfred.app`, release disk images are named `Rfred-<version>-<arch>.dmg`, and the bundle identifier is `dev.jim.rfred.local`. Data is stored in `~/Library/Application Support/RfredLocal`, and the URL scheme is `rfredlocal://`. Rfred is a separate app from Jfred: it does not read Jfred's data folder, and macOS asks for Accessibility, Automation, and folder access again. To keep earlier data, rename `~/Library/Application Support/JfredLocal` to `RfredLocal` before the first launch.
 
 ### Updates and signing
 
