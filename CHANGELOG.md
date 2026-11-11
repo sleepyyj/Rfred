@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.3
+
+### Preferences
+
+On macOS 26 and later the Preferences window again uses the regular sidebar-and-detail layout, so every sidebar item and the selected pane are visible. The search field stays a trailing toolbar item and no longer overlaps the window controls or the sidebar. The sidebar material still reaches the top and bottom of the window, with even padding on the first and last items. Earlier systems are unchanged.
+
 ## 1.1.2
 
 ### Preferences

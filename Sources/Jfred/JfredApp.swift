@@ -45,6 +45,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        if CommandLine.arguments.contains("--render-prefs") {
+            AppRuntime.renderPreferencesOnly = true
+            NSApp.setActivationPolicy(.prohibited)
+        }
         if let event = NSAppleEventManager.shared().currentAppleEvent,
            event.eventID == kAEOpenApplication {
             let loginItemCode = FourCharCode(0x6C676974) // 'lgit'
@@ -55,6 +59,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if AppRuntime.renderPreferencesOnly {
+            let args = CommandLine.arguments
+            let dir = args.dropFirst().first(where: { $0.hasPrefix("/") && $0 != args.first })
+                ?? FileManager.default.temporaryDirectory.appendingPathComponent("jfred-prefs-render").path
+            do {
+                try PreferencesSnapshot.render(model: model, directory: URL(fileURLWithPath: dir))
+                exit(0)
+            } catch {
+                FileHandle.standardError.write(Data("Jfred: failed to render Preferences: \(error)\n".utf8))
+                exit(1)
+            }
+        }
         // A raw bitmap assigned here skips the system squircle, so the Dock draws a square.
         AppRuntime.model = model
         model.start()

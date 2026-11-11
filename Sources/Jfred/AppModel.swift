@@ -11,6 +11,9 @@ enum AppRuntime {
     @MainActor static var explicitQuit = false
     /// True when macOS started Jfred as a login item; don't steal focus then.
     @MainActor static var launchedAsLoginItem = false
+    /// Offscreen Preferences render used for visual checks. Never installs
+    /// hotkeys or loads the user's saved state.
+    @MainActor static var renderPreferencesOnly = false
 }
 
 struct DiskState: Codable {
@@ -165,7 +168,7 @@ final class AppModel {
     var webSearchFilter = ""
     var webSearchOnlyEnabled = false
     var selectedWebSearchID: String?
-    var section: PrefSection = .general
+    var section: PrefSection = PrefSection(rawValue: PreferencesSidebar.defaultSelection) ?? .general
     var feature: FeatureID = .defaultResults
     var selectedWorkflow: UUID?
     var focusToken = 0

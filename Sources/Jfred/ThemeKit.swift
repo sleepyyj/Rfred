@@ -520,7 +520,7 @@ struct WindowReader: NSViewRepresentable {
                     window?.styleMask.insert(.fullSizeContentView)
                     window?.titlebarAppearsTransparent = true
                     window?.titlebarSeparatorStyle = .none
-                    window?.titleVisibility = .hidden
+                    window?.titleVisibility = .visible
                 }
             }
         }
