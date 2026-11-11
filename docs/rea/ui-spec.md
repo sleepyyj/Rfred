@@ -33,7 +33,7 @@
 | 图标 | 40×40，图标与文字间距约 8pt |
 | 模糊 | 15（Modern 为 0） |
 
-Jfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern、Alfred Modern Dark、Alfred Classic、Alfred macOS、Alfred macOS Dark、Frosty Teal、Large Avenir、High Contrast Light。旧主题 ID（modern/macos/frosty 等）会映射到新 ID，旧配置不会失效。
+Rfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern、Alfred Modern Dark、Alfred Classic、Alfred macOS、Alfred macOS Dark、Frosty Teal、Large Avenir、High Contrast Light。旧主题 ID（modern/macos/frosty 等）会映射到新 ID，旧配置不会失效。
 
 ### Action Panel
 
@@ -111,4 +111,4 @@ Jfred 的 10 套主题与此一一对应：Alfred、Alfred Dark、Alfred Modern�
 - Help 只保留本机排障与诊断，不再逐字复刻 Alfred 营销页。
 - Appearance 的实时主题预览、Help 的诊断内容只做了结构级对齐。
 - Workflows 已按 Alfred 对象图实现导入、画布、条件分支和调试器；端口拖拽画线与私有 Automation Task 仍未实现。
-- Alfred 的部分图标为手绘位图，Jfred 使用 SF Symbols + 同色块，形状不同。
+- Alfred 的部分图标为手绘位图，Rfred 使用 SF Symbols + 同色块，形状不同。

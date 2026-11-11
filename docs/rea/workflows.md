@@ -1,6 +1,6 @@
-# Alfred Workflows 逆向与 Jfred 对齐
+# Alfred Workflows 逆向与 Rfred 对齐
 
-本轮目标是把 Jfred 的 Workflows 从“线性动作列表”改成 Alfred 的对象图：读取真实的 `info.plist`，在画布上显示对象与连线，按连接执行 Script Filter、Run Script、Arg and Vars、Conditional、Junction 和输出动作。
+本轮目标是把 Rfred 的 Workflows 从“线性动作列表”改成 Alfred 的对象图：读取真实的 `info.plist`，在画布上显示对象与连线，按连接执行 Script Filter、Run Script、Arg and Vars、Conditional、Junction 和输出动作。
 
 ## 目标与方法
 
@@ -23,7 +23,7 @@ Hopper 的 Apple Events 在本轮 DSH 上下文中被 TCC 拒绝，因此 `decom
 - 空画布使用 `AlfredWorkflowCanvasNoWorkflow.nib`，信息条位于 873×40pt 区域。
 - 编辑区按钮为 26–32pt 高；底部工具栏包含 Alfred Gallery、Help、新建/删除/导入。
 
-Jfred 没有复制 nib 或图标，只采用尺寸、层级和交互语义；画布节点使用 SF Symbols 与平色块。
+Rfred 没有复制 nib 或图标，只采用尺寸、层级和交互语义；画布节点使用 SF Symbols 与平色块。
 
 ## 从真实 workflow 得到的对象图事实
 
@@ -36,18 +36,18 @@ Jfred 没有复制 nib 或图标，只采用尺寸、层级和交互语义；画
 - 脚本字段：`script`、`scriptfile`、`type`、`scriptargtype`、`escaping`。`scriptargtype = 1` 时脚本通过 argv 接收参数；否则 Alfred 在脚本文本中替换 `{query}`。`scriptfile` 非空时执行 workflow 目录内的外部脚本。
 - 画布位置：`uidata[uid].xpos/ypos`，另有 `note`、`colorindex`。
 
-这些事实直接映射到 `Sources/JfredCore/WorkflowGraph.swift` 的 `WorkflowObject` / `WorkflowConnection` 和 `WorkflowImporter`。
+这些事实直接映射到 `Sources/RfredCore/WorkflowGraph.swift` 的 `WorkflowObject` / `WorkflowConnection` 和 `WorkflowImporter`。
 
-## Jfred 实现
+## Rfred 实现
 
 | 文件 | 职责 |
 | --- | --- |
-| `Sources/JfredCore/WorkflowGraph.swift` | 可编码的 `WorkflowValue`、对象/连接/画布模型、旧版线性 Workflow 迁移、Alfred `info.plist` 解析、稳定 UUID |
-| `Sources/JfredCore/WorkflowEngine.swift` | keyword 匹配、Script Filter/List Filter 结果、JSON/XML 解析、节点执行、条件分支、modifier 连线、模板变量、效果列表 |
-| `Sources/JfredCore/WorkflowProcessRunner.swift` | 在 workflow 目录中运行 bash/zsh/php/ruby/python/perl/osascript/swift/外部脚本，注入 `alfred_workflow_*` 环境变量 |
-| `Sources/Jfred/WorkflowRuntime.swift` | 把 workflow 结果映射成启动器行、执行效果、解析选中项 |
-| `Sources/Jfred/PaneWorkflows.swift` | 253pt 工作流列表、66pt 标题栏、对象画布、右侧 220pt 对象库、深色对象配置 sheet、底部调试器 |
-| `Sources/Jfred/JfredStore.swift` | 导入/重载 `.alfredworkflow`、读取完整对象图、保留本地启用状态 |
+| `Sources/RfredCore/WorkflowGraph.swift` | 可编码的 `WorkflowValue`、对象/连接/画布模型、旧版线性 Workflow 迁移、Alfred `info.plist` 解析、稳定 UUID |
+| `Sources/RfredCore/WorkflowEngine.swift` | keyword 匹配、Script Filter/List Filter 结果、JSON/XML 解析、节点执行、条件分支、modifier 连线、模板变量、效果列表 |
+| `Sources/RfredCore/WorkflowProcessRunner.swift` | 在 workflow 目录中运行 bash/zsh/php/ruby/python/perl/osascript/swift/外部脚本，注入 `alfred_workflow_*` 环境变量 |
+| `Sources/Rfred/WorkflowRuntime.swift` | 把 workflow 结果映射成启动器行、执行效果、解析选中项 |
+| `Sources/Rfred/PaneWorkflows.swift` | 253pt 工作流列表、66pt 标题栏、对象画布、右侧 220pt 对象库、深色对象配置 sheet、底部调试器 |
+| `Sources/Rfred/RfredStore.swift` | 导入/重载 `.alfredworkflow`、读取完整对象图、保留本地启用状态 |
 
 ### 执行顺序
 
@@ -83,7 +83,7 @@ Keyword、Script Filter、List Filter、Run Script、AppleScript、Open URL、Op
 
 除 nib frame 外，本轮用 Alfred 官方 [Workflow Editor and Palette](https://www.alfredapp.com/help/workflows/getting-started/editor-and-palette/) 的 `workflow-canvas.png`、`palette-search.png` 和 `workflow-canvas-hints.png` 作为视觉基准（只参考布局、尺寸、颜色和层级，不复制图片资源）。
 
-| 区域 | Alfred 参考 | Jfred 实现 |
+| 区域 | Alfred 参考 | Rfred 实现 |
 | --- | --- | --- |
 | 标题栏 | 46pt 工作流图标、约 20pt 名称、Configure Workflow、右侧工具图标 | 66pt 高，46pt 图标，19pt 名称，Configure Workflow + 键盘/导出/调试/对象库/菜单 |
 | 工作流列表 | 253pt 宽，42pt 行，34pt 图标，深紫底，底部 Help/+/- | 同宽同行高，读取 workflow 目录 `icon.png`，底栏 Help/+/- |
@@ -97,7 +97,7 @@ Keyword、Script Filter、List Filter、Run Script、AppleScript、Open URL、Op
 
 ## 5.8.1 实机取样（Alfred Powerpack 已启用）
 
-在 Alfred Powerpack 启用后直接对 Alfred Preferences 的 Workflows 窗口取样（窗口 1422×860，截图为 2x Retina），把下面这些值写进 Jfred：
+在 Alfred Powerpack 启用后直接对 Alfred Preferences 的 Workflows 窗口取样（窗口 1422×860，截图为 2x Retina），把下面这些值写进 Rfred：
 
 | 项目 | 实测值 |
 | --- | --- |
@@ -124,19 +124,19 @@ Keyword、Script Filter、List Filter、Run Script、AppleScript、Open URL、Op
 `Configure Workflow...` 在 Alfred 中不是“编辑工作流详情”，而是打开 User Configuration / Readme 的配置入口：
 
 - 没有 `userconfigurationconfig` 和 Readme 时，显示浅色 “No Workflow Configuration” 对话框，说明如何用编辑器右上角的 `[x]` 配置 workflow，并只有 `Close` 按钮。
-- Jfred 现在按此行为显示同样的对话框；工作流元数据编辑移到对象库右侧的 `...` → `Workflow Details...`，避免把两个入口混在一起。
+- Rfred 现在按此行为显示同样的对话框；工作流元数据编辑移到对象库右侧的 `...` → `Workflow Details...`，避免把两个入口混在一起。
 
-实机取样也修正了之前的空态卡片：Alfred 的引导卡片约 650pt 宽、90pt 高，Jfred 已按此调整。
+实机取样也修正了之前的空态卡片：Alfred 的引导卡片约 650pt 宽、90pt 高，Rfred 已按此调整。
 
 
 ## 兼容性实测：Epoch Converter
 
-用本机 Alfred 的真实 Epoch Converter workflow（3 objects）直接走 Jfred 的导入/执行链验证：
+用本机 Alfred 的真实 Epoch Converter workflow（3 objects）直接走 Rfred 的导入/执行链验证：
 
 - 顶层 Script Filter：`ts`，`/usr/bin/python3 epoch.py "{query}"`，`scriptargtype = 0`，相对路径脚本。
 - 两个默认输出：Copy to Clipboard 和 Post Notification。
 - 旧版 Alfred-Workflow 库会打印一个错误 XML 并让进程退出 1，但 stdout 里第一份 `<items>` 是有效结果。
-- Jfred 的 XML 解析器现在只取第一份 `<items>`，并支持 `<arg>` 子元素；Script Filter 即使退出码非 0，只要 stdout 有有效 items 就使用它。
+- Rfred 的 XML 解析器现在只取第一份 `<items>`，并支持 `<arg>` 子元素；Script Filter 即使退出码非 0，只要 stdout 有有效 items 就使用它。
 - 默认连线不再只取第一条，因此 clipboard 和 notification 会同时执行。
 
 用 `ts 1700000000` 实测得到 6 条结果（本地时间、UTC、当前时间等），第一条 arg 为 `2023-11-15T06:13:20`，效果为复制该时间和发送 `Time: 2023-11-15T06:13:20` 通知。因此 Epoch Converter 这类“相对路径脚本 + XML 输出 + 多输出”的 workflow 可以导入使用。

@@ -16,34 +16,34 @@ for arg in "$@"; do
 done
 
 "$root/scripts/build-app.sh"
-app="$root/build/Jfred.app"
+app="$root/build/Rfred.app"
 
 version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
 arch="$(uname -m)"
 stage="$root/dist/dmg-stage"
-dmg="$root/dist/Jfred-${version}-${arch}.dmg"
+dmg="$root/dist/Rfred-${version}-${arch}.dmg"
 
 rm -rf "$stage" "$dmg"
 mkdir -p "$stage"
-cp -R "$app" "$stage/Jfred.app"
+cp -R "$app" "$stage/Rfred.app"
 ln -s /Applications "$stage/Applications"
 
 cat > "$stage/Install.txt" <<'EOF'
-Jfred
+Rfred
 =====
 
 Requires macOS 14 or later. This build is Apple Silicon (arm64) only.
 
-1. Drag Jfred into Applications.
-2. First launch: right-click Jfred.app and choose Open
+1. Drag Rfred into Applications.
+2. First launch: right-click Rfred.app and choose Open
    (the app is self-signed with a stable certificate, not notarized).
-   Or run: xattr -cr /Applications/Jfred.app
+   Or run: xattr -cr /Applications/Rfred.app
 
-Jfred stays out of the Dock until Preferences is open.
+Rfred stays out of the Dock until Preferences is open.
 EOF
 
 hdiutil create \
-  -volname "Jfred" \
+  -volname "Rfred" \
   -srcfolder "$stage" \
   -ov \
   -format UDZO \

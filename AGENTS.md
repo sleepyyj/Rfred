@@ -21,9 +21,18 @@ The subject starts with a semver type, then the imperative sentence. A push to `
 
 `Info.plist` in git keeps the last version someone committed. The DMG and the GitHub tag carry the released version.
 
+## App name
+
+The app is Rfred. These identifiers keep the earlier name on purpose, because existing data, permissions, and secrets are stored against them. Do not rename them:
+
+- Bundle identifier `dev.jim.jfred.local` and the other `dev.jim.jfred.*` labels
+- Certificate common name `Jfred Codesign`, `~/.config/jfred/codesign/`, and the `JFRED_CODESIGN_*` secrets
+- Data folders `Application Support/JfredLocal`, `Application Support/Jfred`, and `Caches/JfredLocal`
+- URL scheme `jfredlocal://`, the `.jfred-workflow.json` export suffix, and the saved theme ids `jfred` and `jfred-dark`
+
 ## Code signing
 
-Release builds sign `Jfred.app` with one self-signed certificate, common name `Jfred Codesign`. The designated requirement is:
+Release builds sign `Rfred.app` with one self-signed certificate, common name `Jfred Codesign`. The designated requirement is:
 
 ```text
 identifier "dev.jim.jfred.local" and certificate leaf = H"e4bb0d4d89c4d6d1ab0c3617de5d88225c5a3910"
@@ -38,7 +47,11 @@ The private key is not in git.
 - Local copy: `~/.config/jfred/codesign/jfred-codesign.p12`, with the password in `~/.config/jfred/codesign/password`. A local `scripts/build-app.sh` uses these files when they exist.
 - Actions secrets: `JFRED_CODESIGN_P12` (base64 of the same `.p12`) and `JFRED_CODESIGN_PASSWORD`.
 
-Do not generate a replacement certificate. A new certificate is a new leaf hash, and the next update asks for folder access again. The certificate is not an Apple Developer ID and the app is not notarized. Gatekeeper still treats a freshly downloaded copy as an unidentified developer; the in-app updater removes the quarantine attribute before it replaces `Jfred.app`. The signature still has to pass `codesign --verify --deep --strict`, which is what the updater checks before swapping the bundle.
+Do not generate a replacement certificate. A new certificate is a new leaf hash, and the next update asks for folder access again. The certificate is not an Apple Developer ID and the app is not notarized. Gatekeeper still treats a freshly downloaded copy as an unidentified developer; the in-app updater removes the quarantine attribute before it replaces `Rfred.app`. The signature still has to pass `codesign --verify --deep --strict` against the designated requirement above, which is what the updater checks before swapping the bundle. An ad-hoc signature or another certificate is refused. `AppUpdateFeed.signingCertificateLeafHash` holds the leaf hash; it must match the certificate that signs releases.
+
+`scripts/codesign-app.sh` signs with the hardened runtime (`--options runtime`) and `Resources/Rfred.entitlements`, and fails when the runtime flag is missing. The only entitlement is `com.apple.security.automation.apple-events`, which the hardened runtime requires for the AppleScript commands. Do not add `allow-dyld-environment-variables`, `disable-library-validation`, or `get-task-allow`; they let another process load code into Rfred and use its Accessibility and folder grants.
+
+The in-app updater reads releases from `sleepyyj/Rfred` (`AppUpdateFeed.owner` and `AppUpdateFeed.repo`).
 
 Example:
 

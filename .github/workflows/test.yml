@@ -1,0 +1,37 @@
+name: Test
+
+on:
+  pull_request:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Select latest Xcode
+        run: |
+          set -euo pipefail
+          xcode="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$xcode" ]; then
+            echo "No Xcode.app found" >&2
+            exit 1
+          fi
+          sudo xcode-select -s "$xcode"
+          swift --version
+
+      - name: Test
+        run: ./scripts/test.sh
+
+      # The test target covers RfredCore only. Build the app target too, and
+      # sign it ad hoc to check the hardened runtime and entitlements.
+      - name: Build and sign the app
+        run: ./scripts/build-app.sh

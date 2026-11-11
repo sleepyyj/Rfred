@@ -2,21 +2,21 @@
 import PackageDescription
 
 let package = Package(
-    name: "Jfred",
+    name: "Rfred",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Jfred", targets: ["Jfred"])
+        .executable(name: "Rfred", targets: ["Rfred"])
     ],
     targets: [
         .target(
-            name: "JfredCore",
+            name: "RfredCore",
             swiftSettings: [
                 .unsafeFlags(["-warnings-as-errors"])
             ]
         ),
         .executableTarget(
-            name: "Jfred",
-            dependencies: ["JfredCore"],
+            name: "Rfred",
+            dependencies: ["RfredCore"],
             swiftSettings: [
                 .unsafeFlags(["-parse-as-library", "-warnings-as-errors"])
             ],
@@ -35,8 +35,8 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "JfredCoreTests",
-            dependencies: ["JfredCore"],
+            name: "RfredCoreTests",
+            dependencies: ["RfredCore"],
             swiftSettings: [
                 .unsafeFlags(["-warnings-as-errors"])
             ]

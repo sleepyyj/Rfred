@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.4
+
+### Rfred
+
+The app is now named Rfred. The bundle is `Rfred.app` and release disk images are named `Rfred-<version>-<arch>.dmg`. Settings, clipboard history, snippets, imported workflows, and granted permissions carry over, because the bundle identifier, the signing certificate, the `JfredLocal` data folder, and the `jfredlocal://` URL scheme are unchanged. An installed `Jfred.app` is not renamed by an update: drag `Rfred.app` into Applications once and remove the old copy.
+
+### Updates and signing
+
+In-app updates now come from the sleepyyj/Rfred releases. Before an update replaces the app, Rfred checks that it is signed with the Rfred release certificate, and refuses a copy signed ad hoc or with another certificate. Release builds use the hardened runtime, so other processes can no longer load code into Rfred and use its Accessibility, Automation, or folder access. Existing permissions are kept.
+
 ## 1.1.3
 
 ### Preferences
@@ -30,13 +40,13 @@ Preferences use a unified toolbar, a translucent sidebar, and consistent system 
 
 ## 1.0.0
 
-### Jfred 1.0
+### Rfred 1.0
 
-Jfred 1.0 is the first formal release of the menu-bar launcher: one shortcut for search, clipboard history, snippets, file search, and the workflows you import. Your data stays on this Mac. There is no account, and update checks do not send usage data.
+Rfred 1.0 is the first formal release of the menu-bar launcher: one shortcut for search, clipboard history, snippets, file search, and the workflows you import. Your data stays on this Mac. There is no account, and update checks do not send usage data.
 
 ### Launcher and search
 
-Type a few characters and Jfred searches apps, files, web keywords, system commands, and the other sources you have enabled. Results follow how you actually use the app, so frequent items rise sooner. An empty query can show recent apps and clipboard items first. Return opens the current row; modifier keys run other actions.
+Type a few characters and Rfred searches apps, files, web keywords, system commands, and the other sources you have enabled. Results follow how you actually use the app, so frequent items rise sooner. An empty query can show recent apps and clipboard items first. Return opens the current row; modifier keys run other actions.
 
 ### Clipboard history
 
@@ -52,11 +62,11 @@ Search files and folders with a keyword, or type a path to browse a directory. Y
 
 ### Workflows
 
-Build a chain of keywords, scripts, filters, and actions, or import a compatible workflow package. Import from the Workflows pane with the import button, the menu, or by dropping a file; the package is copied into Jfred's own library and does not change your other data. Script-filter results and keyword-entry rows use the workflow's own artwork — including PNG, ICNS, and PDF icons — instead of generic placeholders. The canvas lets you edit objects, connections, and a debug run.
+Build a chain of keywords, scripts, filters, and actions, or import a compatible workflow package. Import from the Workflows pane with the import button, the menu, or by dropping a file; the package is copied into Rfred's own library and does not change your other data. Script-filter results and keyword-entry rows use the workflow's own artwork — including PNG, ICNS, and PDF icons — instead of generic placeholders. The canvas lets you edit objects, connections, and a debug run.
 
 ### Appearance and hotkeys
 
-Built-in launcher themes can be duplicated and edited: width, corners, type size, and colors update in a live preview. Themes can be imported or exported as appearance files. The launcher hotkey, the Universal Actions hotkey, and per-workflow hotkeys are recorded in Preferences. If a combination is already taken, the page says so. Jfred can also start at login and stays out of the Dock until you open Preferences.
+Built-in launcher themes can be duplicated and edited: width, corners, type size, and colors update in a live preview. Themes can be imported or exported as appearance files. The launcher hotkey, the Universal Actions hotkey, and per-workflow hotkeys are recorded in Preferences. If a combination is already taken, the page says so. Rfred can also start at login and stays out of the Dock until you open Preferences.
 
 ### Universal actions
 
@@ -64,7 +74,7 @@ Act on the current result, or on text and files selected in other apps: open, re
 
 ### Updates
 
-The Updates pane checks public GitHub releases, verifies the official disk image for your architecture, and replaces this copy of Jfred in place. Move the app to the Applications folder first. Pre-releases are included only when you ask for them.
+The Updates pane checks public GitHub releases, verifies the official disk image for your architecture, and replaces this copy of Rfred in place. Move the app to the Applications folder first. Pre-releases are included only when you ask for them.
 
 ### Also in 1.0
 
@@ -80,4 +90,4 @@ The Updates pane checks public GitHub releases, verifies the official disk image
 - Large Type
 - Local usage statistics that you can clear at any time
 
-Jfred 1.0 is a native macOS app for Apple Silicon, and requires macOS 14 or later.
+Rfred 1.0 is a native macOS app for Apple Silicon, and requires macOS 14 or later.
