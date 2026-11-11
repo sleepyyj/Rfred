@@ -5,12 +5,13 @@ struct PreferencesShell: View {
     var model: AppModel
 
     var body: some View {
-        HStack(spacing: 0) {
-            IconRail(model: model)
-            detail
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Group {
+            if #available(macOS 26.0, *) {
+                modernShell
+            } else {
+                legacyShell
+            }
         }
-        .jfredWindowFill()
         .preferredColorScheme(.light)
         .background(WindowReader { window in
             window.identifier = NSUserInterfaceItemIdentifier("preferences")
@@ -36,26 +37,46 @@ struct PreferencesShell: View {
             }
             model.notePreferencesWindow(window)
         })
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    TextField("Search Preferences", text: model.bind(\.prefsQuery))
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13))
-                        .frame(width: 420)
-                }
-                .padding(.horizontal, 10)
-                .frame(height: 28)
-                .jfredGlass(cornerRadius: JfredMetrics.controlRadius)
-            }
-        }
-        .modifier(PreferencesToolbarChrome())
         .onChange(of: model.preferences) { old, _ in model.preferencesChanged(from: old) }
         .onChange(of: model.workflows) { _, _ in model.workflowsChanged() }
         .onChange(of: model.snippets) { _, _ in model.snippetsChanged() }
+    }
+
+    /// Sidebar and detail as a split view so the search field lives in the
+    /// detail toolbar, trailing, clear of the traffic lights and the rail.
+    @available(macOS 26.0, *)
+    private var modernShell: some View {
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            IconRail(model: model)
+                .navigationSplitViewColumnWidth(min: 88, ideal: 88, max: 88)
+                .toolbar(removing: .sidebarToggle)
+        } detail: {
+            detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        PreferencesSearchField(text: model.bind(\.prefsQuery), width: 280)
+                    }
+                }
+                .toolbarTitleDisplayMode(.inline)
+                .navigationTitle("")
+        }
+        .navigationSplitViewStyle(.prominentDetail)
+        .jfredWindowFill()
+    }
+
+    private var legacyShell: some View {
+        HStack(spacing: 0) {
+            IconRail(model: model)
+            detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .jfredWindowFill()
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                PreferencesSearchField(text: model.bind(\.prefsQuery), width: 420)
+            }
+        }
     }
 
     @ViewBuilder private var detail: some View {
@@ -85,15 +106,12 @@ struct IconRail: View {
         if #available(macOS 26.0, *) {
             railStack
                 .padding(.horizontal, 6)
-                .padding(.vertical, 10)
+                .padding(.top, 10)
+                .padding(.bottom, 16)
                 .frame(width: 88)
                 .frame(maxHeight: .infinity)
-                .background {
-                    Color.clear
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .jfredSystemSidebar()
-                        .ignoresSafeArea(.container, edges: [.top, .bottom])
-                }
+                .jfredSystemSidebar()
+                .backgroundExtensionEffect()
                 .layoutPriority(2)
         } else {
             railStack
@@ -289,17 +307,25 @@ private struct ToolbarSearchBackground: ViewModifier {
     }
 }
 
-/// Hide the default toolbar fill on macOS 26+ so the sidebar material can
-/// run under the traffic lights instead of leaving a white titlebar band.
-private struct PreferencesToolbarChrome: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-                .toolbarBackground(.hidden, for: .windowToolbar)
-                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        } else {
-            content
+/// Shared Preferences search control. On macOS 26+ this is a trailing
+/// detail-toolbar item; earlier systems keep it in the window toolbar.
+private struct PreferencesSearchField: View {
+    @Binding var text: String
+    var width: CGFloat = 420
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+            TextField("Search Preferences", text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .frame(width: width)
         }
+        .padding(.horizontal, 10)
+        .frame(height: 28)
+        .jfredGlass(cornerRadius: JfredMetrics.controlRadius)
     }
 }
 

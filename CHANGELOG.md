@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2
+
+### Preferences
+
+The Preferences search field sits in the detail toolbar on macOS 26 and later, trailing, so it no longer overlaps the window controls or the sidebar. The sidebar material now extends through the window's bottom corners, and the last item uses the same even inset as the first. Earlier systems are unchanged.
+
 ## 1.1.1
 
 ### Preferences
