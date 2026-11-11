@@ -30,7 +30,7 @@ The app is Rfred, and every identifier uses that name: the bundle identifier `de
 Release builds sign `Rfred.app` with one self-signed certificate, common name `Rfred Codesign`. The designated requirement is:
 
 ```text
-identifier "dev.jim.rfred.local" and certificate leaf = H"e4bb0d4d89c4d6d1ab0c3617de5d88225c5a3910"
+identifier "dev.jim.rfred.local" and certificate leaf = H"0bb33749a10bc56e0700ff9f1a569fa9c1f8d4cc"
 ```
 
 macOS stores Desktop, Documents, and Downloads consent against that requirement, not against the app name or the install path. `codesign --sign -` sets the requirement to the build's cdhash. Every GitHub Actions runner then produces a different identity, and each installed update asks for those folders again.
