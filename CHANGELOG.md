@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1
+
+### Preferences
+
+On macOS 26 and later the Preferences sidebar extends under the transparent titlebar to the top and bottom of the window, so selecting General or Update no longer leaves a hairline gap against the window chrome. Item padding and the selection highlight are evenly inset. Earlier systems are unchanged.
+
 ## 1.1.0
 
 ### Appearance

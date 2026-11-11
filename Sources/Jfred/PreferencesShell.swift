@@ -15,11 +15,17 @@ struct PreferencesShell: View {
         .background(WindowReader { window in
             window.identifier = NSUserInterfaceItemIdentifier("preferences")
             window.title = ""
-            window.titleVisibility = .visible
-            window.titlebarAppearsTransparent = true
             window.toolbarStyle = .unified
             window.titlebarSeparatorStyle = .none
             window.backgroundColor = NSColor(JfredColor.canvas)
+            if #available(macOS 26.0, *) {
+                window.styleMask.insert(.fullSizeContentView)
+                window.titlebarAppearsTransparent = true
+                window.titleVisibility = .hidden
+            } else {
+                window.titlebarAppearsTransparent = true
+                window.titleVisibility = .visible
+            }
             window.setContentSize(NSSize(width: 1180, height: 766))
             if let screen = window.screen ?? NSScreen.main {
                 let visible = screen.visibleFrame
@@ -46,6 +52,7 @@ struct PreferencesShell: View {
                 .jfredGlass(cornerRadius: JfredMetrics.controlRadius)
             }
         }
+        .modifier(PreferencesToolbarChrome())
         .onChange(of: model.preferences) { old, _ in model.preferencesChanged(from: old) }
         .onChange(of: model.workflows) { _, _ in model.workflowsChanged() }
         .onChange(of: model.snippets) { _, _ in model.snippetsChanged() }
@@ -75,6 +82,31 @@ struct IconRail: View {
     private var bottom: [PrefSection] { [.usage, .help, .update] }
 
     var body: some View {
+        if #available(macOS 26.0, *) {
+            railStack
+                .padding(.horizontal, 6)
+                .padding(.vertical, 10)
+                .frame(width: 88)
+                .frame(maxHeight: .infinity)
+                .background {
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .jfredSystemSidebar()
+                        .ignoresSafeArea(.container, edges: [.top, .bottom])
+                }
+                .layoutPriority(2)
+        } else {
+            railStack
+                .padding(.bottom, 12)
+                .padding(.top, 8)
+                .frame(width: 88)
+                .frame(maxHeight: .infinity)
+                .jfredSystemSidebar()
+                .layoutPriority(2)
+        }
+    }
+
+    private var railStack: some View {
         VStack(spacing: 0) {
             ForEach(top) { section in
                 railButton(section)
@@ -84,12 +116,6 @@ struct IconRail: View {
                 railButton(section)
             }
         }
-        .padding(.bottom, 12)
-        .padding(.top, 8)
-        .frame(width: 88)
-        .frame(maxHeight: .infinity)
-        .jfredSystemSidebar()
-        .layoutPriority(2)
     }
 
     private func railButton(_ section: PrefSection) -> some View {
@@ -262,3 +288,18 @@ private struct ToolbarSearchBackground: ViewModifier {
         }
     }
 }
+
+/// Hide the default toolbar fill on macOS 26+ so the sidebar material can
+/// run under the traffic lights instead of leaving a white titlebar band.
+private struct PreferencesToolbarChrome: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+                .toolbarBackground(.hidden, for: .windowToolbar)
+                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        } else {
+            content
+        }
+    }
+}
+

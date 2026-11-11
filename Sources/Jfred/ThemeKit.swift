@@ -516,6 +516,12 @@ struct WindowReader: NSViewRepresentable {
             // SwiftUI applies the expanded preference toolbar after this view attaches.
             DispatchQueue.main.async { [weak window] in
                 window?.toolbarStyle = .unified
+                if #available(macOS 26.0, *) {
+                    window?.styleMask.insert(.fullSizeContentView)
+                    window?.titlebarAppearsTransparent = true
+                    window?.titlebarSeparatorStyle = .none
+                    window?.titleVisibility = .hidden
+                }
             }
         }
     }
